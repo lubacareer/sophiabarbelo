@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import mirrorArtwork from './assets/sophia-mirror.png';
 
 const statusLabels = {
@@ -100,9 +100,21 @@ export default function App() {
   const [type, setType] = useState('text');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
+  const [reasoningEffort, setReasoningEffort] = useState('');
+  const [supportsReasoning, setSupportsReasoning] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const endpoint = window.location.pathname.startsWith('/admin/') ? '/admin/api/config' : '/api/config';
+    fetch(endpoint, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((config) => setSupportsReasoning(config?.reasoningControls === true))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -120,7 +132,7 @@ export default function App() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, content }),
+        body: JSON.stringify({ type, content, ...(reasoningEffort ? { reasoningEffort } : {}) }),
       });
       let data;
       try { data = await response.json(); } catch { throw new Error('The server returned an unexpected response. Please try again.'); }
@@ -168,6 +180,18 @@ export default function App() {
             <input id="analysis-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/article" disabled={isLoading} />
           </>
         )}
+        {supportsReasoning && <div className="reasoning-options">
+          <div className="reasoning-copy">
+            <label htmlFor="reasoning-effort">Reasoning depth <span>· Grok 4.7</span></label>
+            <p id="reasoning-description">Deeper reasoning may take longer.</p>
+          </div>
+          <select id="reasoning-effort" value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={isLoading} aria-describedby="reasoning-description">
+            <option value="">Default</option>
+            <option value="low">Fast</option>
+            <option value="medium">Balanced</option>
+            <option value="high">Deep</option>
+          </select>
+        </div>}
         <div className="form-footer">
           <p>{type === 'text' ? 'Try a news article, opinion piece, or your own text.' : 'Enter a link to a publicly accessible article.'}</p>
           <button className="analyze-button" type="submit" disabled={isLoading}>{isLoading ? 'Analyzing…' : 'Analyze'}</button>

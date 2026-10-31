@@ -30,10 +30,10 @@ body {
   min-height: 100vh;
   background: #173d30 url('./assets/book-of-wisdom.png') center 60% / cover no-repeat fixed;
 }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
-button:disabled, input:disabled, textarea:disabled { cursor: wait; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #2a785b; outline-offset: 2px; }
+button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: wait; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #2a785b; outline-offset: 2px; }
 a { color: #17664d; overflow-wrap: anywhere; }
 
 .shell { width: min(1060px, calc(100% - 48px)); margin: 0 auto; padding: 18px 0 48px; }
@@ -57,6 +57,11 @@ textarea, input[type='url'] { display: block; width: 100%; border: 1px solid #ad
 textarea { min-height: 74px; resize: vertical; }
 input[type='url'] { min-height: 44px; }
 textarea::placeholder, input::placeholder { color: #173a28; opacity: 1; }
+.reasoning-options { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
+.reasoning-copy label { display: block; color: #061b12; font-size: 13px; font-weight: 800; }
+.reasoning-copy label span { font-weight: 600; }
+.reasoning-copy p { margin-top: 2px; color: #254638; font-size: 12px; }
+.reasoning-options select { min-height: 38px; max-width: 100%; padding: 6px 30px 6px 12px; border: 1px solid #adcdbb; border-radius: 12px; background: rgb(217 239 223 / 80%); color: #061b12; font-size: 13px; cursor: pointer; }
 .form-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 9px; }
 .form-footer p { color: #061b12; font-size: 12px; line-height: 1.4; }
 .analyze-button { min-width: 100px; min-height: 38px; border: 0; border-radius: 999px; padding: 8px 19px; color: #fff; background: #246d50; box-shadow: 0 3px 8px #246d5025; font-weight: 600; font-size: 14px; transition: background .15s ease, transform .15s ease; }

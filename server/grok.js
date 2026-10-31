@@ -1,6 +1,6 @@
 import { AppError } from './errors.js';
 
-const schema = {
+export const schema = {
   type: 'object', additionalProperties: false, required: ['claims', 'rhetoric', 'limitations'],
   properties: {
     claims: { type: 'array', items: {
@@ -46,7 +46,7 @@ function providerUrls(data) {
   return urls;
 }
 
-function validatedResult(result, provider, original) {
+export function validatedResult(result, provider, original) {
   if (!result || !Array.isArray(result.claims) || !Array.isArray(result.rhetoric) || !Array.isArray(result.limitations)) {
     throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
   }
@@ -64,7 +64,7 @@ function validatedResult(result, provider, original) {
   return { claims, rhetoric, limitations: result.limitations.filter((item) => typeof item === 'string').slice(0, 10) };
 }
 
-export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.3', fetchImpl = fetch } = {}) {
+export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), fetchImpl = fetch } = {}) {
   if (!apiKey) throw new AppError(503, 'Analysis is unavailable: configure XAI_API_KEY on the server.');
   let response;
   try {
@@ -73,6 +73,7 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
       signal: AbortSignal.timeout(120_000),
       body: JSON.stringify({
         model, store: false, include: ['no_inline_citations'],
+        ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
         input: [{ role: 'system', content: instruction }, { role: 'user', content: text }],
         tools: [{ type: 'web_search' }],
         text: { format: { type: 'json_schema', name: 'rhetoric_analysis', schema, strict: true } },
@@ -81,7 +82,11 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
   } catch { throw new AppError(502, 'The analysis service could not be reached. Please try again.'); }
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw new AppError(503, 'The analysis service credentials are invalid or do not have access.');
-    if (response.status === 429) throw new AppError(503, 'The analysis service is busy or has reached its limit. Please try again later.');
+    if (response.status === 429) {
+      const error = new AppError(503, 'The analysis service is busy or has reached its limit. Please try again later.');
+      error.providerRateLimited = true;
+      throw error;
+    }
     throw new AppError(502, 'The analysis service could not complete the request. Please try again.');
   }
   try {

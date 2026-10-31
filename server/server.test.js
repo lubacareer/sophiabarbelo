@@ -31,6 +31,43 @@ test('API validates input and routes text and URLs', async () => {
   });
 });
 
+test('API validates and forwards the optional reasoning setting', async () => {
+  const seen = [];
+  const app = createApp({
+    extract: async () => 'Article text',
+    analyze: async (text, options) => { seen.push({ text, effort: options?.reasoningEffort }); return { claims: [], rhetoric: [], limitations: [] }; },
+  });
+  await withServer(app, async (base) => {
+    for (const effort of ['low', 'medium', 'high']) {
+      assert.equal((await post(base, { type: 'text', content: 'A claim', reasoningEffort: effort })).status, 200);
+    }
+    assert.equal((await post(base, { type: 'url', content: 'https://example.org/article', reasoningEffort: 'high' })).status, 200);
+    assert.equal((await post(base, { type: 'text', content: 'A claim' })).status, 200);
+    for (const effort of ['xhigh', '', null, 1, ['low']]) {
+      assert.equal((await post(base, { type: 'text', content: 'A claim', reasoningEffort: effort })).status, 400);
+    }
+    assert.deepEqual(seen, [
+      { text: 'A claim', effort: 'low' }, { text: 'A claim', effort: 'medium' }, { text: 'A claim', effort: 'high' },
+      { text: 'Article text', effort: 'high' }, { text: 'A claim', effort: undefined },
+    ]);
+  });
+});
+
+test('a Grok reasoning setting is rejected for the Groq provider', async () => {
+  const previousProvider = process.env.ANALYSIS_PROVIDER;
+  process.env.ANALYSIS_PROVIDER = 'groq';
+  try {
+    await withServer(createApp(), async (base) => {
+      const result = await post(base, { type: 'text', content: 'A claim', reasoningEffort: 'high' });
+      assert.equal(result.status, 400);
+      assert.match(result.body.error, /Grok only/);
+    });
+  } finally {
+    if (previousProvider === undefined) delete process.env.ANALYSIS_PROVIDER;
+    else process.env.ANALYSIS_PROVIDER = previousProvider;
+  }
+});
+
 test('API passes a valid public URL through the real article extractor', async () => {
   let requests = 0;
   const article = 'A public article with enough text to be read and analyzed by the application.';
@@ -148,22 +185,30 @@ test('Grok missing credentials and upstream errors are safe', async () => {
   await assert.rejects(() => analyzeWithGrok('hello', { apiKey: 'secret', fetchImpl: async () => { throw new Error('secret'); } }), /could not be reached/);
 });
 
-test('Grok defaults to the faster model and honors configured overrides', async () => {
+test('Grok defaults to 4.7 with low effort and honors configured overrides', async () => {
   const previous = process.env.XAI_MODEL;
-  const models = [];
+  const previousEffort = process.env.XAI_REASONING_EFFORT;
+  const requests = [];
   const fetchImpl = async (_url, options) => {
-    models.push(JSON.parse(options.body).model);
+    requests.push(JSON.parse(options.body));
     return { ok: true, json: async () => ({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ claims: [], rhetoric: [], limitations: [] }) }] }] }) };
   };
   try {
     delete process.env.XAI_MODEL;
+    delete process.env.XAI_REASONING_EFFORT;
     await analyzeWithGrok('A claim', { apiKey: 'test', fetchImpl });
     process.env.XAI_MODEL = 'grok-configured';
     await analyzeWithGrok('A claim', { apiKey: 'test', fetchImpl });
     await analyzeWithGrok('A claim', { apiKey: 'test', model: 'grok-explicit', fetchImpl });
-    assert.deepEqual(models, ['grok-4.3', 'grok-configured', 'grok-explicit']);
+    process.env.XAI_REASONING_EFFORT = 'medium';
+    await analyzeWithGrok('A claim', { apiKey: 'test', model: 'grok-4.7', fetchImpl });
+    await analyzeWithGrok('A claim', { apiKey: 'test', model: 'grok-4.7', reasoningEffort: 'high', fetchImpl });
+    assert.deepEqual(requests.map(({ model }) => model), ['grok-4.7', 'grok-configured', 'grok-explicit', 'grok-4.7', 'grok-4.7']);
+    assert.deepEqual(requests.map(({ reasoning }) => reasoning), [{ effort: 'low' }, undefined, undefined, { effort: 'medium' }, { effort: 'high' }]);
   } finally {
     if (previous === undefined) delete process.env.XAI_MODEL;
     else process.env.XAI_MODEL = previous;
+    if (previousEffort === undefined) delete process.env.XAI_REASONING_EFFORT;
+    else process.env.XAI_REASONING_EFFORT = previousEffort;
   }
 });
