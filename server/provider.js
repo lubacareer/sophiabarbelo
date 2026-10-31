@@ -25,7 +25,7 @@ async function freeResearch(text, groq) {
   }
   for (const [index, model] of freeModels.entries()) {
     try {
-      const result = await groq(text, { model, requireCitations: true, maxRetryWaitSeconds: 0 });
+      const result = await groq(text, { model, requireCitations: true, maxRetryWaitSeconds: 30 });
       if (index > 0) result.limitations.push('The primary research model was unavailable, so a free fallback model was used.');
       return result;
     } catch (error) {
