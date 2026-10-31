@@ -15,7 +15,8 @@ export function supportsReasoning() {
   const role = deploymentRole();
   if (role === 'public') return false;
   if (role === 'admin') return true;
-  return (process.env.ANALYSIS_PROVIDER || 'xai').toLowerCase() === 'xai';
+  return (process.env.ANALYSIS_PROVIDER || 'xai').toLowerCase() === 'xai'
+    && (process.env.XAI_MODEL || 'grok-4.7') === 'grok-4.7';
 }
 
 async function freeResearch(text, groq) {

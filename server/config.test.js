@@ -5,10 +5,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { parseEnv } from 'node:util';
 import { apiProxyTarget } from '../vite.config.js';
 
 test('example environment file starts with a comment, without a UTF-8 BOM', () => {
   assert.equal(readFileSync('.env.example')[0], '#'.charCodeAt(0));
+});
+
+test('example environment leaves reasoning effort unset', () => {
+  const example = parseEnv(readFileSync('.env.example', 'utf8'));
+  assert.equal(Object.hasOwn(example, 'XAI_REASONING_EFFORT'), false);
 });
 
 test('Vite proxy uses the API listener address, including wildcard and IPv6 hosts', () => {
