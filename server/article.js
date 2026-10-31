@@ -10,6 +10,19 @@ import { AppError } from './errors.js';
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT = 30_000;
 const TIMEOUT = 10_000;
+const MAX_ADDRESSES = 3;
+const RETRYABLE_CONNECTION_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH',
+  'EADDRNOTAVAIL', 'ENETDOWN', 'EHOSTDOWN',
+]);
+
+// Kept distinct from response and content errors so only failures to connect
+// to a particular vetted address can trigger a retry.
+export class ArticleConnectionError extends AppError {
+  constructor() {
+    super(422, 'The article could not be accessed. Try pasting its text instead.');
+  }
+}
 
 export function isPublicAddress(address) {
   if (!ipaddr.isValid(address)) return false;
@@ -59,6 +72,7 @@ function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['t
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? https : http;
     let timer;
+    let responseReceived = false;
     const req = transport.request(url, {
       method,
       headers: {
@@ -71,9 +85,12 @@ function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['t
         if (options.all) callback(null, [address]);
         else callback(null, address.address, address.family);
       },
+      // Avoid pooling a socket opened for an earlier, differently pinned request.
+      agent: false,
       autoSelectFamily: false,
       timeout: TIMEOUT,
     }, (res) => {
+      responseReceived = true;
       const status = res.statusCode || 0;
       if ([301, 302, 303, 307, 308].includes(status)) {
         res.resume();
@@ -100,14 +117,29 @@ function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['t
       res.on('end', () => resolve({ body: Buffer.concat(chunks).toString('utf8'), type }));
       res.on('error', () => reject(new AppError(422, 'The article could not be read.')));
     });
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', () => reject(new AppError(422, 'The article could not be accessed. Try pasting its text instead.')));
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+    req.on('error', (error) => {
+      if (!responseReceived && RETRYABLE_CONNECTION_CODES.has(error.code)) return reject(new ArticleConnectionError());
+      return reject(new AppError(422, 'The article could not be accessed. Try pasting its text instead.'));
+    });
     // Socket idle timeouts alone can be defeated by a slow response. Bound the
     // complete response even if the remote peer keeps sending small chunks.
-    timer = setTimeout(() => req.destroy(new Error('deadline exceeded')), TIMEOUT);
+    timer = setTimeout(() => req.destroy(Object.assign(new Error('deadline exceeded'), { code: 'ETIMEDOUT' })), TIMEOUT);
     req.on('close', () => clearTimeout(timer));
     req.end(body);
   });
+}
+
+async function requestWithFallback(url, addresses, request, options) {
+  let lastError;
+  for (const address of addresses.slice(0, MAX_ADDRESSES)) {
+    try { return await request(url, address, options); }
+    catch (error) {
+      if (!(error instanceof ArticleConnectionError)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError || new AppError(422, 'The article could not be accessed. Try pasting its text instead.');
 }
 
 // Breaking The News serves an empty HTML shell and loads the full article from
@@ -118,7 +150,7 @@ async function extractBreakingNews(url, resolve, request) {
   if (!match) return '';
   const apiUrl = parsePublicUrl(new URL('/api/article', url).href);
   const addresses = await resolve(apiUrl.hostname);
-  const response = await request(apiUrl, addresses[0], {
+  const response = await requestWithFallback(apiUrl, addresses, request, {
     method: 'POST', body: JSON.stringify({ NewsID: match[1] }), acceptedTypes: ['application/json'],
   });
   // Do not forward the POST body to a redirect destination.
@@ -140,7 +172,7 @@ export async function extractArticle(value, { resolve = resolvePublic, request =
   let url = parsePublicUrl(value);
   for (let redirects = 0; redirects <= 3; redirects++) {
     const addresses = await resolve(url.hostname);
-    const response = await request(url, addresses[0]);
+    const response = await requestWithFallback(url, addresses, request);
     if ('redirect' in response) {
       if (!response.redirect || redirects === 3) throw new AppError(422, 'The website redirected too many times or to an invalid address.');
       try { url = parsePublicUrl(new URL(response.redirect, url).href); }

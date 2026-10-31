@@ -10,7 +10,7 @@
                     "test":  "node --test"
                 },
     "engines":  {
-                    "node":  "\u003e=22"
+                    "node":  "^22.22.2 || ^24.15.0 || >=26.0.0"
                 },
     "dependencies":  {
                          "@mozilla/readability":  "^0.6.0",

@@ -116,7 +116,9 @@ export default function App() {
     setResult(null);
     setIsLoading(true);
     try {
-      const response = await fetch('/api/analyze', {
+      // The proxy authenticates requests in the /admin/ protection space.
+      const endpoint = window.location.pathname.startsWith('/admin/') ? '/admin/api/analyze' : '/api/analyze';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type, content }),

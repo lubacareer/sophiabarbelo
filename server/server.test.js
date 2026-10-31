@@ -114,6 +114,7 @@ test('Grok only accepts provider-cited sources for the specific claim and authen
   };
   const actual = await analyzeWithGrok(text, { apiKey: 'test', fetchImpl });
   assert.deepEqual(request.tools, [{ type: 'web_search' }]);
+  assert.deepEqual(request.include, ['no_inline_citations']);
   assert.equal(request.store, false);
   assert.equal(actual.claims.length, 2);
   assert.deepEqual(actual.claims[0].sources, [{ title: 'Report', url: 'https://example.org/report' }]);

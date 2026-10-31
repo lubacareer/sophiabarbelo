@@ -72,7 +72,7 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
       method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
       signal: AbortSignal.timeout(120_000),
       body: JSON.stringify({
-        model, store: false,
+        model, store: false, include: ['no_inline_citations'],
         input: [{ role: 'system', content: instruction }, { role: 'user', content: text }],
         tools: [{ type: 'web_search' }],
         text: { format: { type: 'json_schema', name: 'rhetoric_analysis', schema, strict: true } },

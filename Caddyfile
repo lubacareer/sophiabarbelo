@@ -1,0 +1,43 @@
+# Run Caddy and the Node server on the same host. Node must listen on loopback.
+{$SOPHIA_DOMAIN:localhost} {
+  @admin_root path /admin
+  redir @admin_root /admin/ 308
+
+  # Only authenticated requests may use the admin API. Browsers cache the
+  # credentials within /admin/, so the page and API share one protection space.
+  handle /admin/api/* {
+    basic_auth {
+      {env.SOPHIA_ADMIN_USER} {env.SOPHIA_ADMIN_HASH}
+    }
+    uri strip_prefix /admin
+    reverse_proxy 127.0.0.1:3001 {
+      header_up Authorization "Bearer {env.SOPHIA_PROXY_SECRET}"
+      header_up X-Sophia-Client-IP {http.request.remote.host}
+      header_up X-Sophia-Admin 1
+      header_up -X-Sophia-Proxy-Secret
+    }
+  }
+
+  handle /admin/* {
+    basic_auth {
+      {env.SOPHIA_ADMIN_USER} {env.SOPHIA_ADMIN_HASH}
+    }
+    rewrite * /
+    reverse_proxy 127.0.0.1:3001 {
+      header_up Authorization "Bearer {env.SOPHIA_PROXY_SECRET}"
+      header_up X-Sophia-Client-IP {http.request.remote.host}
+      header_up X-Sophia-Admin 1
+      header_up -X-Sophia-Proxy-Secret
+    }
+  }
+
+  # Overwrite identity headers even if the incoming request supplied them.
+  handle {
+    reverse_proxy 127.0.0.1:3001 {
+      header_up Authorization "Bearer {env.SOPHIA_PROXY_SECRET}"
+      header_up X-Sophia-Client-IP {http.request.remote.host}
+      header_up X-Sophia-Admin 0
+      header_up -X-Sophia-Proxy-Secret
+    }
+  }
+}
