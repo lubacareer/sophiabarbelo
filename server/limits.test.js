@@ -45,8 +45,12 @@ test('concurrency limit covers actual work and is released after failures', asyn
   const pending = [];
   const app = createApp({ proxySecret: trustedSecret, analyze: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) });
   await withServer(app, async (base) => {
-    const first = [post(base), post(base), post(base)];
-    while (pending.length < 3) await new Promise((resolve) => setTimeout(resolve, 5));
+    const first = [];
+    for (let i = 0; i < 3; i++) {
+      first.push(post(base));
+      // Keep request and pending-work order aligned while all three stay in flight.
+      while (pending.length <= i) await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     assert.equal((await post(base)).status, 429);
 
     const adminRequest = post(base, 'An admin claim', { Authorization: `Bearer ${trustedSecret}`, 'X-Sophia-Admin': '1' });

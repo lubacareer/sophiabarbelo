@@ -147,3 +147,23 @@ test('Grok missing credentials and upstream errors are safe', async () => {
   await assert.rejects(() => analyzeWithGrok('hello', { apiKey: 'secret', fetchImpl: async () => ({ ok: false, status: 401 }) }), /credentials are invalid/);
   await assert.rejects(() => analyzeWithGrok('hello', { apiKey: 'secret', fetchImpl: async () => { throw new Error('secret'); } }), /could not be reached/);
 });
+
+test('Grok defaults to the faster model and honors configured overrides', async () => {
+  const previous = process.env.XAI_MODEL;
+  const models = [];
+  const fetchImpl = async (_url, options) => {
+    models.push(JSON.parse(options.body).model);
+    return { ok: true, json: async () => ({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ claims: [], rhetoric: [], limitations: [] }) }] }] }) };
+  };
+  try {
+    delete process.env.XAI_MODEL;
+    await analyzeWithGrok('A claim', { apiKey: 'test', fetchImpl });
+    process.env.XAI_MODEL = 'grok-configured';
+    await analyzeWithGrok('A claim', { apiKey: 'test', fetchImpl });
+    await analyzeWithGrok('A claim', { apiKey: 'test', model: 'grok-explicit', fetchImpl });
+    assert.deepEqual(models, ['grok-4.3', 'grok-configured', 'grok-explicit']);
+  } finally {
+    if (previous === undefined) delete process.env.XAI_MODEL;
+    else process.env.XAI_MODEL = previous;
+  }
+});

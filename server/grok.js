@@ -64,7 +64,7 @@ function validatedResult(result, provider, original) {
   return { claims, rhetoric, limitations: result.limitations.filter((item) => typeof item === 'string').slice(0, 10) };
 }
 
-export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', fetchImpl = fetch } = {}) {
+export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.3', fetchImpl = fetch } = {}) {
   if (!apiKey) throw new AppError(503, 'Analysis is unavailable: configure XAI_API_KEY on the server.');
   let response;
   try {

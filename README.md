@@ -7,7 +7,7 @@ Sophia’s Mirror explores factual claims and rhetorical techniques in text or a
 Requirements: Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and an xAI API key with access to a Grok model supporting web search and structured outputs.
 
 1. Run `npm install`.
-2. Copy `.env.example` to `.env` and set `XAI_API_KEY` privately. Never commit or share the key. Optionally set `XAI_MODEL`.
+2. Copy `.env.example` to `.env` and set `XAI_API_KEY` privately. Never commit or share the key. Analysis defaults to the faster `grok-4.3`; optionally set `XAI_MODEL` to another supported model.
 3. Run `npm run dev`, then open the Vite address displayed in the terminal.
 
 For a production-style local run, use `npm run build` followed by `npm start`; the app is served at http://127.0.0.1:3001. The server requires a loopback address; expose it through the proxy described below.
