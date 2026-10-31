@@ -131,6 +131,35 @@ test('Groq returns a clear limit error instead of waiting excessively or retryin
   assert.equal(slept, false);
 });
 
+test('Groq does not sleep when the provider delay exceeds the configured retry budget', async () => {
+  let slept = false;
+  let calls = 0;
+  await assert.rejects(() => analyzeWithGroq(sourceText, {
+    apiKey: 'test', maxRetryWaitSeconds: 15,
+    sleepImpl: async () => { slept = true; },
+    fetchImpl: async () => { calls++; return { ok: false, status: 429, headers: new Headers({ 'retry-after': '16' }) }; },
+  }), (error) => error.status === 429 && error.retryAfter === 16);
+  assert.equal(slept, false);
+  assert.equal(calls, 1);
+});
+
+test('Groq shares its retry wait budget across research and analysis', async () => {
+  const delays = [];
+  let calls = 0;
+  await assert.rejects(() => analyzeWithGroq(sourceText, {
+    apiKey: 'test', maxRetryWaitSeconds: 15,
+    sleepImpl: async (ms) => delays.push(ms),
+    fetchImpl: async () => {
+      calls++;
+      if (calls === 1) return { ok: false, status: 429, headers: new Headers({ 'retry-after': '10' }) };
+      if (calls === 2) return completion({ content: 'Research', executed_tools: [] });
+      return { ok: false, status: 429, headers: new Headers({ 'retry-after': '6' }) };
+    },
+  }), (error) => error.status === 429 && error.retryAfter === 6);
+  assert.deepEqual(delays, [10000]);
+  assert.equal(calls, 3);
+});
+
 test('default app uses xAI and rejects unsupported provider configuration', async () => {
   const previousProvider = process.env.ANALYSIS_PROVIDER;
   const previousKey = process.env.XAI_API_KEY;
