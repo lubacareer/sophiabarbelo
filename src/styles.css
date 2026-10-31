@@ -24,20 +24,24 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #173d30 url('./assets/book-of-wisdom.png') center 60% / cover no-repeat fixed;
+}
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled, input:disabled, textarea:disabled { cursor: wait; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #2a785b; outline-offset: 2px; }
 a { color: #17664d; overflow-wrap: anywhere; }
 
-.shell { width: min(1260px, calc(100% - 48px)); margin: 0 auto; padding: 18px 0 48px; }
+.shell { width: min(1060px, calc(100% - 48px)); margin: 0 auto; padding: 18px 0 48px; }
 .masthead { display: flex; justify-content: space-between; align-items: center; gap: 28px; margin-bottom: 20px; padding: 22px 24px; border: 1px solid #b8d9c4; border-radius: 26px; background: #cbe8d5; }
 .masthead-copy { min-width: 0; padding: 8px 0; }
 .masthead-art { position: relative; flex: 0 0 min(38%, 390px); height: 162px; }
 .masthead-art img { display: block; object-fit: cover; }
 .mirror-art { width: 100%; height: 100%; border-radius: 20px; }
-.book-art { position: absolute; right: -8px; bottom: -8px; width: 90px; height: 90px; border: 4px solid #cbe8d5; border-radius: 18px; box-shadow: 0 5px 16px #173d3028; }
 h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { font-weight: 800; }
 h1 { font-size: 36px; line-height: 1.08; letter-spacing: -0.03em; }
@@ -62,7 +66,7 @@ textarea::placeholder, input::placeholder { color: #587a69; opacity: 1; }
 .form-message { margin-top: 10px; color: #436b5b; font-size: 13px; }
 .form-message.error { color: #843944; }
 
-.analysis { margin-top: 19px; }
+.analysis { margin-top: 19px; padding: 20px; border: 1px solid #b8d9c4; border-radius: 22px; background: #d8f0df; box-shadow: 0 8px 24px #173d3026; }
 .analysis > h2 { font-size: 34px; line-height: 1.1; letter-spacing: -.65px; }
 .section-intro { margin-top: 5px; color: #436b5b; font-size: 14px; }
 .results-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 15px; align-items: start; }
@@ -97,13 +101,15 @@ blockquote { margin: 8px 0 0; padding: 9px 12px; border-radius: 10px; background
   .masthead-copy { padding: 0; }
   .masthead .masthead-aside { display: none; }
   .masthead-art { flex: none; width: 100%; height: 125px; }
-  .book-art { width: 70px; height: 70px; }
+  .analysis { padding: 16px; }
   h1 { font-size: 32px; }
   .results-grid { grid-template-columns: 1fr; gap: 12px; }
   .analysis > h2 { font-size: 30px; }
 }
 
 @media (max-width: 380px) {
+  .input-tabs { gap: 8px; }
+  .input-tab { font-size: 13px; white-space: nowrap; }
   .form-footer { align-items: stretch; flex-direction: column; }
   .analyze-button { align-self: flex-end; }
   .finding-heading { flex-wrap: wrap; }

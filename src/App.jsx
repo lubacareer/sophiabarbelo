@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import mirrorArtwork from './assets/sophia-mirror.png';
-import bookArtwork from './assets/book-of-wisdom.png';
 
 const statusLabels = {
   supported: 'Supported',
@@ -150,7 +149,6 @@ export default function App() {
         </div>
         <div className="masthead-art" aria-hidden="true">
           <img className="mirror-art" src={mirrorArtwork} alt="" />
-          <img className="book-art" src={bookArtwork} alt="" />
         </div>
       </header>
 
