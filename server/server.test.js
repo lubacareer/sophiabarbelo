@@ -71,6 +71,31 @@ test('DNS results and redirects cannot reach private addresses', async () => {
   assert.deepEqual(requests, ['https://example.org/']);
 });
 
+test('client-rendered Breaking The News articles use the full article API safely', async () => {
+  const calls = [];
+  const extract = (payload, override = {}) => extractArticle('https://breakingthenews.net/Article/example/12345', {
+    resolve: async () => [{ address: '8.8.8.8', family: 4 }],
+    request: async (url, address, options) => {
+      calls.push({ url: url.href, address, options });
+      if (!options) return { type: 'text/html', body: '<html><body><div id="root"></div></body></html>' };
+      return override.redirect ? { redirect: override.redirect } : { type: 'application/json', body: JSON.stringify(payload) };
+    },
+  });
+  const payload = { NewsArticle: { '@id': '12345', Article: { '#cdata-section': '<p>First paragraph of the complete article.</p><p>Second paragraph provides further detail.</p><script>ignore me</script>' } } };
+  assert.equal(await extract(payload), 'First paragraph of the complete article. Second paragraph provides further detail.');
+  assert.equal(calls[1].url, 'https://breakingthenews.net/api/article');
+  assert.deepEqual(calls[1].options, { method: 'POST', body: JSON.stringify({ NewsID: '12345' }), acceptedTypes: ['application/json'] });
+  assert.deepEqual(calls[1].address, { address: '8.8.8.8', family: 4 });
+  await assert.rejects(() => extract({ NewsArticle: { ...payload.NewsArticle, '@id': 'different' } }), /No readable article/);
+  await assert.rejects(() => extract(payload, { redirect: 'http://169.254.169.254/' }), /No readable article/);
+  let requests = 0;
+  await assert.rejects(() => extractArticle('https://example.org/Article/example/12345', {
+    resolve: async () => [{ address: '8.8.8.8', family: 4 }],
+    request: async () => { requests++; return { type: 'text/html', body: '<div id="root"></div>' }; },
+  }), /No readable article/);
+  assert.equal(requests, 1);
+});
+
 test('Grok only accepts provider-cited sources for the specific claim and authentic excerpts', async () => {
   const text = 'The river rose last year. Everyone knows who is to blame.';
   let request;

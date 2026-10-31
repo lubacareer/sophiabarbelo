@@ -55,13 +55,18 @@ export async function resolvePublic(hostname, lookup = dns.lookup) {
   } finally { clearTimeout(timer); }
 }
 
-function requestPinned(url, address) {
+function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['text/html', 'application/xhtml+xml', 'text/plain'] } = {}) {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? https : http;
     let timer;
     const req = transport.request(url, {
-      method: 'GET',
-      headers: { 'user-agent': 'SophiasMirror/1.0', accept: 'text/html,application/xhtml+xml,text/plain', 'accept-encoding': 'identity' },
+      method,
+      headers: {
+        'user-agent': 'SophiasMirror/1.0',
+        accept: acceptedTypes.join(','),
+        'accept-encoding': 'identity',
+        ...(body === undefined ? {} : { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }),
+      },
       lookup: (_hostname, options, callback) => {
         if (options.all) callback(null, [address]);
         else callback(null, address.address, address.family);
@@ -76,7 +81,7 @@ function requestPinned(url, address) {
       }
       if (status < 200 || status >= 300) { res.resume(); return reject(new AppError(422, 'The article could not be accessed. Try pasting its text instead.')); }
       const type = (res.headers['content-type'] || '').toLowerCase();
-      if (!type.startsWith('text/html') && !type.startsWith('application/xhtml+xml') && !type.startsWith('text/plain')) {
+      if (!acceptedTypes.some((accepted) => type.split(';', 1)[0].trim() === accepted)) {
         res.resume(); return reject(new AppError(422, 'The URL must point to an HTML or plain-text article.'));
       }
       if (res.headers['content-encoding'] && res.headers['content-encoding'] !== 'identity') {
@@ -101,8 +106,34 @@ function requestPinned(url, address) {
     // complete response even if the remote peer keeps sending small chunks.
     timer = setTimeout(() => req.destroy(new Error('deadline exceeded')), TIMEOUT);
     req.on('close', () => clearTimeout(timer));
-    req.end();
+    req.end(body);
   });
+}
+
+// Breaking The News serves an empty HTML shell and loads the full article from
+// its own JSON endpoint. Restrict the adapter to article IDs and the same host.
+async function extractBreakingNews(url, resolve, request) {
+  if (!['breakingthenews.net', 'www.breakingthenews.net'].includes(url.hostname.toLowerCase())) return '';
+  const match = url.pathname.match(/^\/Article\/[^/]+\/(\d+)\/?$/i);
+  if (!match) return '';
+  const apiUrl = parsePublicUrl(new URL('/api/article', url).href);
+  const addresses = await resolve(apiUrl.hostname);
+  const response = await request(apiUrl, addresses[0], {
+    method: 'POST', body: JSON.stringify({ NewsID: match[1] }), acceptedTypes: ['application/json'],
+  });
+  // Do not forward the POST body to a redirect destination.
+  if ('redirect' in response) return '';
+  let article;
+  try { article = JSON.parse(response.body)?.NewsArticle; } catch { return ''; }
+  if (String(article?.['@id']) !== match[1] || typeof article?.Article?.['#cdata-section'] !== 'string') return '';
+  const dom = new JSDOM(article.Article['#cdata-section']);
+  dom.window.document.querySelectorAll('script, style, noscript').forEach((element) => element.remove());
+  dom.window.document.querySelectorAll('p, div, li, br, h1, h2, h3, h4, h5, h6').forEach((element) => {
+    element.after(dom.window.document.createTextNode(' '));
+  });
+  const text = dom.window.document.body.textContent || '';
+  dom.window.close();
+  return text;
 }
 
 export async function extractArticle(value, { resolve = resolvePublic, request = requestPinned } = {}) {
@@ -123,6 +154,9 @@ export async function extractArticle(value, { resolve = resolvePublic, request =
       const article = new Readability(dom.window.document).parse();
       text = article?.textContent || '';
       dom.window.close();
+      if (text.replace(/\s+/g, ' ').trim().length < 40) {
+        text = await extractBreakingNews(url, resolve, request);
+      }
     }
     text = text.replace(/\s+/g, ' ').trim();
     if (text.length < 40) throw new AppError(422, 'No readable article text was found. Try pasting the text instead.');
