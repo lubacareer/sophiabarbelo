@@ -3,7 +3,8 @@
   "framework": "vite",
   "fluid": true,
   "env": {
-    "NODE_OPTIONS": "--experimental-require-module"
+    "NODE_OPTIONS": "--experimental-require-module",
+    "SOPHIA_GROQ_FREE_CONFIRMED": "true"
   },
   "functions": {
     "api/*.js": { "maxDuration": 300 }
