@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { apiProxyTarget } from '../vite.config.js';
+
+test('example environment file starts with a comment, without a UTF-8 BOM', () => {
+  assert.equal(readFileSync('.env.example')[0], '#'.charCodeAt(0));
+});
 
 test('Vite proxy uses the API listener address, including wildcard and IPv6 hosts', () => {
   assert.equal(apiProxyTarget({}), 'http://127.0.0.1:3001');

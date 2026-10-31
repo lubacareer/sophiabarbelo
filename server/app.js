@@ -2,7 +2,7 @@ import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import net from 'node:net';
 import ipaddr from 'ipaddr.js';
-import { extractArticle } from './article.js';
+import { extractArticle, parsePublicUrl } from './article.js';
 import { analyzeWithGrok } from './grok.js';
 import { AppError } from './errors.js';
 
@@ -15,6 +15,12 @@ const MAX_CLIENTS = 10_000;
 function normalizeIp(value) {
   if (typeof value !== 'string' || !net.isIP(value)) return null;
   return ipaddr.process(value).toString();
+}
+
+function quotaKey(address) {
+  const parsed = ipaddr.parse(address);
+  if (parsed.kind() === 'ipv4') return `v4:${parsed.toString()}`;
+  return `v6:${Buffer.from(parsed.toByteArray().slice(0, 8)).toString('hex')}`;
 }
 
 function isLoopback(value) {
@@ -53,6 +59,8 @@ export function createApp({ extract = extractArticle, analyze = analyzeWithGrok,
       }
       const value = content.trim();
       if (value.length > (type === 'url' ? 2_048 : MAX_TEXT)) throw new AppError(400, type === 'url' ? 'The URL is too long.' : 'Text must be 30,000 characters or fewer.');
+      // Reject URLs that are invalid without network access before allocating quota.
+      if (type === 'url') parsePublicUrl(value);
 
       // Only a loopback proxy presenting the shared secret can assert identity.
       // Direct clients' forwarded headers are never used for rate limiting.
@@ -63,9 +71,10 @@ export function createApp({ extract = extractArticle, analyze = analyzeWithGrok,
       if (!administrator) {
         const client = trustedProxy ? normalizeIp(req.get('X-Sophia-Client-IP')) : normalizeIp(req.socket.remoteAddress);
         if (!client) throw new AppError(400, 'The client address could not be verified.');
+        const key = quotaKey(client);
         const time = now();
-        let entry = clients.get(client);
-        if (entry && time >= entry.resetAt) { clients.delete(client); entry = undefined; }
+        let entry = clients.get(key);
+        if (entry && time >= entry.resetAt) { clients.delete(key); entry = undefined; }
         if (entry && entry.count >= RATE_LIMIT) {
           res.set('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt - time) / 1000))));
           return res.status(429).json({ error: 'Too many analyses. Please try again later.' });
@@ -83,7 +92,7 @@ export function createApp({ extract = extractArticle, analyze = analyzeWithGrok,
             return res.status(429).json({ error: 'The analyzer is busy. Please try again shortly.' });
           }
           entry = { count: 0, resetAt: time + RATE_WINDOW_MS };
-          clients.set(client, entry);
+          clients.set(key, entry);
         }
         entry.count++;
         anonymousInFlight++;

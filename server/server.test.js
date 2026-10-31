@@ -31,6 +31,24 @@ test('API validates input and routes text and URLs', async () => {
   });
 });
 
+test('API passes a valid public URL through the real article extractor', async () => {
+  let requests = 0;
+  const article = 'A public article with enough text to be read and analyzed by the application.';
+  const app = createApp({
+    extract: (url) => extractArticle(url, {
+      resolve: async () => [{ address: '8.8.8.8', family: 4 }],
+      request: async () => { requests++; return { type: 'text/plain', body: article }; },
+    }),
+    analyze: async (text) => ({ claims: [], rhetoric: [], limitations: [text] }),
+  });
+  await withServer(app, async (base) => {
+    assert.equal((await post(base, { type: 'url', content: 'http://127.0.0.1/' })).status, 400);
+    assert.equal(requests, 0);
+    assert.deepEqual((await post(base, { type: 'url', content: 'https://example.org/article' })).body.limitations, [article]);
+    assert.equal(requests, 1);
+  });
+});
+
 test('API returns clear expected failures without exposing internal errors', async () => {
   const app = createApp({ extract: async () => { throw new AppError(422, 'Cannot read article.'); }, analyze: async () => { throw new Error('secret'); } });
   await withServer(app, async (base) => {

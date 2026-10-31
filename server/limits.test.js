@@ -12,11 +12,11 @@ async function withServer(app, run) {
   finally { await new Promise((resolve) => server.close(resolve)); }
 }
 
-function post(base, content = 'A claim to analyze', headers = {}) {
+function post(base, content = 'A claim to analyze', headers = {}, type = 'text') {
   return fetch(`${base}/api/analyze`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify({ type: 'text', content }),
+    body: JSON.stringify({ type, content }),
   });
 }
 
@@ -92,16 +92,74 @@ test('a client disconnect does not release capacity while analysis is still runn
   });
 });
 
-test('equivalent trusted IPv6 spellings share a client quota', async () => {
+test('trusted IPv6 addresses in the same /64 share a quota, while other prefixes do not', async () => {
   const app = createApp({ analyze: async () => result, proxySecret: trustedSecret });
   await withServer(app, async (base) => {
     const headers = { Authorization: `Bearer ${trustedSecret}`, 'X-Sophia-Admin': '0' };
     for (let i = 0; i < 10; i++) {
-      const address = i % 2 ? '2001:db8::1' : '2001:0db8:0000:0000:0000:0000:0000:0001';
+      const address = i % 2 ? '2001:db8::2' : '2001:0db8:0000:0000:0000:0000:0000:0001';
       assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': address })).status, 200);
     }
     assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '2001:db8::1' })).status, 429);
-    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '2001:db8::2' })).status, 200);
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '2001:db8::2' })).status, 429);
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '2001:db8:0:1::1' })).status, 200);
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '2001:db8::3', 'X-Sophia-Admin': '1' })).status, 200);
+  });
+});
+
+test('IPv4 and mapped IPv6 use the same full IPv4 quota without grouping other addresses', async () => {
+  const app = createApp({ analyze: async () => result, proxySecret: trustedSecret });
+  await withServer(app, async (base) => {
+    const headers = { Authorization: `Bearer ${trustedSecret}`, 'X-Sophia-Admin': '0' };
+    for (let i = 0; i < 10; i++) {
+      const address = i % 2 ? '::ffff:192.0.2.5' : '192.0.2.5';
+      assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': address })).status, 200);
+    }
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '::ffff:c000:205' })).status, 429);
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '192.0.2.6' })).status, 200);
+  });
+});
+
+test('direct IPv6 sockets and trusted proxy addresses use the same /64 key', async (t) => {
+  const app = createApp({ analyze: async () => result, proxySecret: trustedSecret });
+  const server = app.listen(0, '::1');
+  try {
+    await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+  } catch (error) {
+    if (['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(error.code)) return t.skip('IPv6 loopback is unavailable');
+    throw error;
+  }
+  try {
+    const base = `http://[::1]:${server.address().port}`;
+    for (let i = 0; i < 10; i++) assert.equal((await post(base)).status, 200);
+    const headers = { Authorization: `Bearer ${trustedSecret}`, 'X-Sophia-Admin': '0', 'X-Sophia-Client-IP': '::2' };
+    assert.equal((await post(base, 'A claim', headers)).status, 429);
+    assert.equal((await post(base, 'A claim', { ...headers, 'X-Sophia-Client-IP': '0:0:0:1::1' })).status, 200);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
+});
+
+test('URLs rejected before extraction do not consume anonymous quota', async () => {
+  let extractions = 0;
+  let analyses = 0;
+  const app = createApp({
+    proxySecret: trustedSecret,
+    extract: async () => { extractions++; return 'Article text'; },
+    analyze: async () => { analyses++; return result; },
+  });
+  await withServer(app, async (base) => {
+    const headers = { Authorization: `Bearer ${trustedSecret}`, 'X-Sophia-Admin': '0', 'X-Sophia-Client-IP': '2001:db8::1' };
+    for (const url of ['https://localhost', 'http://127.0.0.1/', 'file:///etc/passwd', 'not a URL']) {
+      for (let i = 0; i < 3; i++) assert.equal((await post(base, url, headers, 'url')).status, 400);
+    }
+    assert.equal(extractions, 0);
+    assert.equal(analyses, 0);
+    for (let i = 0; i < 10; i++) assert.equal((await post(base, 'https://example.org/article', headers, 'url')).status, 200);
+    assert.equal((await post(base, 'https://example.org/article', headers, 'url')).status, 429);
+    assert.equal((await post(base, 'https://localhost', headers, 'url')).status, 400);
+    assert.equal((await post(base, 'https://localhost', { ...headers, 'X-Sophia-Admin': '1' }, 'url')).status, 400);
+    assert.equal(extractions, 10);
+    assert.equal(analyses, 10);
+    assert.equal((await post(base, 'https://example.org/article', { ...headers, 'X-Sophia-Admin': '1' }, 'url')).status, 200);
   });
 });
 
