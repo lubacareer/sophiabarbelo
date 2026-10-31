@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import mirrorArtwork from './assets/sophia-mirror.png';
+import bookArtwork from './assets/book-of-wisdom.png';
 
 const statusLabels = {
   supported: 'Supported',
@@ -139,11 +141,15 @@ export default function App() {
   return (
     <main className="shell">
       <header className="masthead">
-        <div>
+        <div className="masthead-copy">
           <h1>Sophia’s Mirror</h1>
           <p>Analyze claims. Explore rhetoric. Think more clearly.</p>
+          <p className="masthead-aside">Different perspectives. A clearer picture.</p>
         </div>
-        <p className="masthead-aside">Different perspectives. A clearer picture.</p>
+        <div className="masthead-art" aria-hidden="true">
+          <img className="mirror-art" src={mirrorArtwork} alt="" />
+          <img className="book-art" src={bookArtwork} alt="" />
+        </div>
       </header>
 
       <form className="input-panel" onSubmit={handleSubmit}>
