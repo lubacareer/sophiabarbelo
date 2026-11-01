@@ -1,5 +1,6 @@
 import { AppError } from './errors.js';
 import { localize, outputLanguageInstruction } from './localization.js';
+import { passageAnalysisInstruction } from './analysis-instruction.js';
 
 export const rhetoricCategories = ['scapegoating', 'selective_piety', 'shame_fear', 'demagogy', 'victim_blaming', 'intimidation', 'faulty_reasoning', 'other'];
 export const rhetoricInstruction = ` Use stable rhetoric categoryId values: scapegoating for assigning collective blame without adequate evidence (Azazel); selective_piety for applying claimed moral or religious standards selectively to favor an in-group (Stork Wings); shame_fear for appeals to shame or fear; demagogy for appeals to group resentment or prejudice in place of evidence; victim_blaming for treating a person's suffering as proof of their fault, including possible gaslighting only when the excerpt supports that interpretation; intimidation for threats or appeals to overwhelming power; faulty_reasoning for a concrete logical error; other for any other justified observation. A text's religious identity, disagreement, emotional tone, or use of rhetoric alone is not evidence of an error. Set isReasoningFlaw true only when the explanation identifies a specific invalid inference or contradiction in the excerpt; otherwise false. Do not treat questions, metaphor, uncertainty, or a contested premise alone as proof of a logical flaw. Category labels must be descriptive, and all observations remain interpretations rather than verdicts about people.`;
@@ -81,7 +82,7 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
       body: JSON.stringify({
         model, store: false, include: ['no_inline_citations'],
         ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-        input: [{ role: 'system', content: instruction + rhetoricInstruction + outputLanguageInstruction(language) }, { role: 'user', content: text }],
+        input: [{ role: 'system', content: instruction + passageAnalysisInstruction + rhetoricInstruction + outputLanguageInstruction(language) }, { role: 'user', content: text }],
         tools: [{ type: 'web_search' }],
         text: { format: { type: 'json_schema', name: 'rhetoric_analysis', schema, strict: true } },
       }),
