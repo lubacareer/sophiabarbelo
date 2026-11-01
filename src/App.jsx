@@ -205,7 +205,7 @@ export default function App() {
 
   useEffect(() => {
     document.body.dataset.section = route.view;
-    document.title = route.view === 'pleroma' ? 'Pleroma 3D · Sophia’s Mirror' : 'Sophia’s Mirror';
+    document.title = route.view === 'pleroma' ? `${navigation[language].pleroma} · Sophia’s Mirror` : 'Sophia’s Mirror';
     document.querySelector('meta[name="description"]')?.setAttribute('content', route.view === 'pleroma' ? navigation[language].subtitle : translate(language, 'analysisIntro'));
   }, [route.view, language]);
 

@@ -140,8 +140,8 @@
   .dimension-switch { flex-shrink: 0; }
   .dimension-switch button { min-width: 51px; min-height: 44px; padding: 8px 14px; font-size: 15px; }
   .overlay-toggle { font-size: 13px; line-height: 1.35; gap: 6px; min-height: 44px; }
-  .overlay-toggle input { appearance: none; min-width: 29px; width: 29px; height: 19px; border-radius: 15px; border: 1px solid #86ae95; background: #b8d9c4; position: relative; margin: 0; }
-  .overlay-toggle input::after { content: ''; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; }
+  .overlay-toggle input { appearance: none; min-width: 29px; width: 29px; height: 19px; border-radius: 15px; border: 1px solid #246d50; background: #b8d9c4; position: relative; margin: 0; }
+  .overlay-toggle input::after { content: ''; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #246d50; }
   .overlay-toggle input:checked { background: var(--atlas-accent); border-color: var(--atlas-accent); }
   .overlay-toggle input:checked::after { left: 12px; background: #fff; }
   .overlay-menu-button { padding: 5px !important; width: 24px; min-height: 44px; }

@@ -188,7 +188,7 @@ export default function Explorer({ language, route, onRouteChange }) {
   const rendererProps = { tradition, language, selectedId: selected?.id, onSelect: selectNode, overlays: route.overlays, zoom, focusLayer, cameraKey, reducedMotion, eventKey, cloudUrl, onFailure: graphicsFailure };
 
   return <section className="pleroma" aria-labelledby="pleroma-title">
-    <div className="pleroma-title-row"><h1 id="pleroma-title">Pleroma 3D</h1><p>{t(language, 'subtitle')}</p></div>
+    <div className="pleroma-title-row"><h1 id="pleroma-title">{t(language, 'title')}</h1><p>{t(language, 'subtitle')}</p></div>
     <div className="pleroma-toolbar">
       <nav className="tradition-tabs" aria-label={t(language, 'traditionNavigation')}>
         {traditions.map((item) => <button type="button" key={item.id} aria-pressed={tradition.id === item.id} onClick={() => changeTradition(item.id)}>{localize(item.title, language)}</button>)}

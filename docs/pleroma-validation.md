@@ -111,6 +111,24 @@ reading panel. Tradition changes fade scenes instead of equating their figures.
 - Browser console checks found no application errors. The analyzer tests used one
   deterministic local mock response; no model requests or credits were used.
 
+### Localized titles and mobile toggle verification
+
+- Browser titles reuse the existing navigation translations and the visible H1
+  reuses the existing title message. English, Hebrew, and Russian were checked
+  during live language changes, deep-link reloads, and Back/Forward navigation.
+  Analyze and brand navigation retain the unchanged `Sophia’s Mirror` title.
+- Hebrew and Russian headings fit at 320px and 390px without page overflow.
+  The existing heading ID, subtitle, and accessibility association are retained.
+- Computed mobile colors give 5.17:1 unchecked border/toolbar contrast, 4.07:1
+  unchecked thumb/track contrast, and 6.22:1 checked thumb/track contrast. Space
+  toggles both states; thumb offsets remain 2px/12px and keyboard focus remains
+  visible. The desktop checkbox retains native appearance, 18px width, and the
+  same overlay-menu behavior.
+- Initial analyzer network checks found no explorer, catalog, Three.js, or Fiber
+  requests. No imports, rendering data, or dependencies changed. Browser console
+  checks found no application errors. The existing localization tests (3/3),
+  full suite (122/122), production build, and whitespace checks passed.
+
 ## Practical limits
 
 The 3D chunk is approximately 955 kB minified (253 kB gzip), loaded on demand.
