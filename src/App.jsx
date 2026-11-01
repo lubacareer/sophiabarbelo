@@ -166,7 +166,7 @@ export default function App() {
   const [route, setRoute] = useState(() => readExplorerRoute(window.location.search, window.matchMedia('(max-width: 760px)').matches ? '2d' : '3d'));
   const routeRef = useRef(route);
   routeRef.current = route;
-  const analyzerHash = useRef(window.location.hash);
+  const analyzerHash = useRef(route.view === 'analyze' ? window.location.hash : '');
   const [type, setType] = useState('text');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
