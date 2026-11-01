@@ -93,6 +93,25 @@ test('HTTP errors localize validation, URL failures and store failures without c
   });
 });
 
+test('daily public quota errors are localized and retain Retry-After', async () => {
+  const error = new AppError(429, 'Daily analysis limit reached. Please try again later.');
+  error.retryAfter = 43_210;
+  const app = createApp({ deployment: 'public', sharedLimiter: { acquire: async () => { throw error; } } });
+  const messages = {
+    en: error.message,
+    he: 'מכסת הניתוחים ל־24 שעות מוצתה. יש לנסות שוב מאוחר יותר.',
+    ru: 'Достигнут лимит анализов за 24 часа. Повторите попытку позже.',
+  };
+  await withServer(app, async (base) => {
+    for (const [language, message] of Object.entries(messages)) {
+      const response = await post(base, { type: 'text', content: 'A claim', language }, { 'x-forwarded-for': '8.8.8.8' });
+      assert.equal(response.status, 429);
+      assert.equal(response.retryAfter, '43210');
+      assert.deepEqual(response.body, { error: message });
+    }
+  });
+});
+
 test('language is forwarded through the free model, administrator fallback and direct local providers', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: 'true' }, async () => {
     const calls = [];

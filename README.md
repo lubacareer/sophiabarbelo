@@ -30,6 +30,18 @@ For a production-style local run, use `npm run build` followed by `npm start`; t
 
 Run `npm test` to execute the server tests and `npm run build` to check the frontend build.
 
+The public quota integration tests execute the real Lua scripts against an isolated Redis on loopback. CI starts Redis automatically. Locally, start a disposable instance and opt in before running the tests (PowerShell):
+
+```powershell
+docker run --detach --rm --name sophia-quota-tests --publish 127.0.0.1:56379:6379 redis:7.4-alpine
+$env:SOPHIA_TEST_REDIS_PORT = '56379'
+npm test
+docker stop sophia-quota-tests
+Remove-Item Env:SOPHIA_TEST_REDIS_PORT
+```
+
+Without `SOPHIA_TEST_REDIS_PORT`, these integration tests are skipped. They use only UUID-prefixed test keys on `127.0.0.1`, clean up those keys, and never use the app's Redis credentials or real analysis providers.
+
 ## Vercel deployment
 
 For a personal, noncommercial project, Vercel Hobby can host the built frontend and Node API in two **separate** projects linked to this repository. Keep `sophiabarbelo` and `sophiabarbelo.vercel.app` for the public website, and use `sophiabarbelo-admin` for private administrator access. The public project defaults to verified free Groq access; an explicitly configured OpenAI option is described below. The administrator project uses Grok 4.7 with the existing xAI account. The Vercel deployment does not use the Caddy administrator endpoint.
@@ -45,7 +57,9 @@ The article extractor's `jsdom` dependency needs Node's support for `require()` 
 
 To select OpenAI for the public project instead of the default Groq route, explicitly configure `SOPHIA_PUBLIC_PROVIDER=openai`, `SOPHIA_OPENAI_COSTS_CONFIRMED=true`, and a secret `OPENAI_API_KEY` in that project, together with the shared Upstash settings above. The public model is fixed to `gpt-6-luna` regardless of `OPENAI_MODEL`. This opt-in permits billable model and web-search requests; configure appropriate provider-side spend limits and check the linked API organization's credit balance first. The administrator route and its free Groq fallback are unchanged. Do not enable this option until its API and citation behavior have been verified on a protected preview.
 
-Public requests use a shared Redis quota of ten analyses per client per ten minutes and a maximum of three concurrent analyses. The service fails closed if the shared store is unavailable. The administrator project bypasses those application limits but remains subject to provider and hosting limits.
+Public requests use shared Redis allowances of **five admitted analysis attempts per 10-minute window** and **30 per 24-hour window**, with at most **two concurrent analyses per client** and **three across the public site**. Each window starts with its first admitted attempt and keeps its own expiry. A client is one public IPv4 address or IPv6 `/64` network, so visitors on the same network can share an allowance. The existing research settings and input allowance remain in use.
+
+Extraction and provider failures count as admitted attempts; requests rejected by initial input validation or quota/capacity checks do not. Exhausted allowances return HTTP 429 with `Retry-After`; the daily allowance has a distinct localized message. The service fails closed if Redis is unavailable. Redis stores hashed network quota identifiers, counters, and temporary leases for up to 24 hours; it does not store submitted text or analysis results. The administrator project bypasses those application limits but remains subject to provider and hosting limits.
 
 Keep Redis credentials and all provider keys private. Public requests send submitted text to Groq by default when `SOPHIA_GROQ_FREE_CONFIRMED=true`, or to OpenAI when `SOPHIA_PUBLIC_PROVIDER=openai` and `SOPHIA_OPENAI_COSTS_CONFIRMED=true` are configured. Administrator requests send text to xAI first and may also send it to Groq after an xAI rate limit when the confirmed free Groq fallback is configured. Local requests send text to the provider selected by `ANALYSIS_PROVIDER`, which defaults to xAI. Review each applicable provider's terms and data policies before submitting private material.
 
