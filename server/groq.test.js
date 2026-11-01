@@ -42,7 +42,7 @@ test('Groq researches and structures separately, preserving only provider-cited 
   assert.equal(requests.length, 2);
   for (const request of requests) {
     assert.equal(request.url, 'https://api.groq.com/openai/v1/chat/completions');
-    assert.equal(request.body.model, 'openai/gpt-oss-20b');
+    assert.equal(request.body.model, 'openai/gpt-oss-120b');
     assert.equal(request.headers.authorization, 'Bearer test-key');
   }
   assert.deepEqual(requests[0].body.tools, [{ type: 'browser_search' }]);
@@ -81,6 +81,23 @@ test('Groq reports missing credentials and upstream failures safely at either st
     apiKey: 'secret', fetchImpl: async () => ++calls === 1 ? completion({ content: 'No useful sources.', executed_tools: [] }) : { ok: false, status: 429 },
   }), /limit|busy/i);
   assert.equal(calls, 2);
+});
+
+test('local Groq honors an explicitly configured GROQ_MODEL', async () => {
+  const previousModel = process.env.GROQ_MODEL;
+  process.env.GROQ_MODEL = 'configured-model';
+  try {
+    const models = [];
+    const fetchImpl = async (_url, options) => {
+      models.push(JSON.parse(options.body).model);
+      return completion({ content: models.length === 1 ? 'Research' : JSON.stringify(analysis), executed_tools: [] });
+    };
+    await analyzeWithGroq(sourceText, { apiKey: 'test', fetchImpl });
+    assert.deepEqual(models, ['configured-model', 'configured-model']);
+  } finally {
+    if (previousModel === undefined) delete process.env.GROQ_MODEL;
+    else process.env.GROQ_MODEL = previousModel;
+  }
 });
 
 test('Groq supports an explicit model override and rejects malformed analysis', async () => {

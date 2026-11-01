@@ -3,7 +3,7 @@ import { analyzeWithGrok } from './grok.js';
 import { analyzeWithGroq } from './groq.js';
 import { localize } from './localization.js';
 
-const freeModels = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+const freeModel = 'openai/gpt-oss-120b';
 
 function deploymentRole() {
   if (!process.env.VERCEL) return 'local';
@@ -24,15 +24,7 @@ async function freeResearch(text, groq, options) {
   if (process.env.SOPHIA_GROQ_FREE_CONFIRMED !== 'true') {
     throw new AppError(503, 'Free web research is not configured. Please try again later.');
   }
-  for (const [index, model] of freeModels.entries()) {
-    try {
-      const result = await groq(text, { ...(options.language !== undefined ? { language: options.language } : {}), model, requireCitations: true, maxRetryWaitSeconds: 30 });
-      if (index > 0) result.limitations.push(localize('The primary research model was unavailable, so a free fallback model was used.', options.language));
-      return result;
-    } catch (error) {
-      if ((error?.status !== 429 && !error?.providerResearchUnavailable) || index === freeModels.length - 1) throw error;
-    }
-  }
+  return groq(text, { ...(options.language !== undefined ? { language: options.language } : {}), model: freeModel, requireCitations: true, maxRetryWaitSeconds: 30 });
 }
 
 export async function analyzeConfigured(text, options = {}, { grok = analyzeWithGrok, groq = analyzeWithGroq } = {}) {

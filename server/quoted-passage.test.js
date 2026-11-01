@@ -10,12 +10,12 @@ const source = 'https://example.org/source';
 
 // These tests inspect requests and validation with stubbed provider output;
 // they do not claim that a model will always produce a particular interpretation.
-async function runGroq(text, language, output = empty) {
+async function runGroq(text, language, output = empty, research = 'Research evidence') {
   const requests = [];
   const result = await analyzeWithGroq(text, { apiKey: 'test', language, fetchImpl: async (_url, options) => {
     requests.push(JSON.parse(options.body));
     const message = requests.length === 1
-      ? { content: 'Research evidence', executed_tools: [{ search_results: { results: [{ url: source }] } }] }
+      ? { content: research, executed_tools: [{ search_results: { results: [{ url: source }] } }] }
       : { content: JSON.stringify(output) };
     return { ok: true, json: async () => ({ choices: [{ message }] }) };
   } });
@@ -43,6 +43,11 @@ test('both providers receive substantive-passage guidance in every model stage w
     const groq = await runGroq(text, language);
     const grok = await runGrok(text, language);
     assert.equal(groq.requests.length, 2);
+    assert.match(groq.requests[0].messages[0].content, /first read the supplied passage itself/i);
+    assert.match(groq.requests[0].messages[0].content, /speaker's substantive assertions, implied arguments, and rhetorical questions/i);
+    assert.match(groq.requests[1].messages[0].content, /analyze the original text independently of the research/i);
+    assert.match(groq.requests[1].messages[0].content, /research as evidence, not as the list of claims/i);
+    assert.match(groq.requests[1].messages[0].content, /Missing factual sources do not prevent a grounded rhetorical observation/i);
     for (const prompt of [groq.requests[0].messages[0].content, groq.requests[1].messages[0].content, grok.request.input[0].content]) {
       assert.ok(prompt.includes(passageAnalysisInstruction), 'each stage must receive the shared guidance');
       assert.match(prompt, /substantive assertions, reasoning, and rhetorical choices/i);
@@ -61,6 +66,18 @@ test('both providers receive substantive-passage guidance in every model stage w
     assert.deepEqual(groq.result, empty);
     assert.deepEqual(grok.result, empty);
   }
+});
+
+test('fidelity-focused research does not suppress an excerpt-grounded rhetorical finding', async () => {
+  const text = 'Report 2020: “All debtors are dishonest.”';
+  const excerpt = 'All debtors are dishonest.';
+  const research = 'The wording matches the report; no evidence about debtors was found.';
+  const output = { claims: [], rhetoric: [{ category: 'Faulty reasoning', categoryId: 'faulty_reasoning', isReasoningFlaw: true, excerpt, explanation: 'The universal conclusion is stated without evidence about every debtor.' }], limitations: [] };
+  const { requests, result } = await runGroq(text, 'en', output, research);
+  assert.equal(JSON.parse(requests[1].messages[1].content).research, research);
+  assert.equal(result.rhetoric[0].excerpt, excerpt);
+  assert.equal(result.rhetoric[0].isReasoningFlaw, true);
+  assert.deepEqual(result.claims, []);
 });
 
 test('an explicitly asserted quotation-fidelity claim can retain evidence in either provider', async () => {
