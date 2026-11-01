@@ -1,4 +1,5 @@
 import { createApp } from './app.js';
+import { localize, requestLanguage } from './localization.js';
 
 // The role is fixed by the deployment configuration, never by a request header.
 // Vercel Authentication must protect the entire administrator deployment.
@@ -12,7 +13,7 @@ export default function vercelHandler(req, res) {
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(JSON.stringify({ error: 'This deployment is not safely configured.' }));
+    res.end(JSON.stringify({ error: localize('This deployment is not safely configured.', requestLanguage(req)) }));
     return;
   }
   return app(req, res);

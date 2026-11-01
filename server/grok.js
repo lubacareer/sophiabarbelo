@@ -1,4 +1,8 @@
 import { AppError } from './errors.js';
+import { localize, outputLanguageInstruction } from './localization.js';
+
+export const rhetoricCategories = ['scapegoating', 'selective_piety', 'shame_fear', 'demagogy', 'victim_blaming', 'intimidation', 'faulty_reasoning', 'other'];
+export const rhetoricInstruction = ` Use stable rhetoric categoryId values: scapegoating for assigning collective blame without adequate evidence (Azazel); selective_piety for applying claimed moral or religious standards selectively to favor an in-group (Stork Wings); shame_fear for appeals to shame or fear; demagogy for appeals to group resentment or prejudice in place of evidence; victim_blaming for treating a person's suffering as proof of their fault, including possible gaslighting only when the excerpt supports that interpretation; intimidation for threats or appeals to overwhelming power; faulty_reasoning for a concrete logical error; other for any other justified observation. A text's religious identity, disagreement, emotional tone, or use of rhetoric alone is not evidence of an error. Set isReasoningFlaw true only when the explanation identifies a specific invalid inference or contradiction in the excerpt; otherwise false. Do not treat questions, metaphor, uncertainty, or a contested premise alone as proof of a logical flaw. Category labels must be descriptive, and all observations remain interpretations rather than verdicts about people.`;
 
 export const schema = {
   type: 'object', additionalProperties: false, required: ['claims', 'rhetoric', 'limitations'],
@@ -13,8 +17,8 @@ export const schema = {
       },
     } },
     rhetoric: { type: 'array', items: {
-      type: 'object', additionalProperties: false, required: ['category', 'excerpt', 'explanation'],
-      properties: { category: { type: 'string' }, excerpt: { type: 'string' }, explanation: { type: 'string' } },
+      type: 'object', additionalProperties: false, required: ['category', 'categoryId', 'isReasoningFlaw', 'excerpt', 'explanation'],
+      properties: { category: { type: 'string' }, categoryId: { type: 'string', enum: rhetoricCategories }, isReasoningFlaw: { type: 'boolean' }, excerpt: { type: 'string' }, explanation: { type: 'string' } },
     } },
     limitations: { type: 'array', items: { type: 'string' } },
   },
@@ -46,7 +50,7 @@ function providerUrls(data) {
   return urls;
 }
 
-export function validatedResult(result, provider, original) {
+export function validatedResult(result, provider, original, language) {
   if (!result || !Array.isArray(result.claims) || !Array.isArray(result.rhetoric) || !Array.isArray(result.limitations)) {
     throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
   }
@@ -57,14 +61,17 @@ export function validatedResult(result, provider, original) {
       const sources = item.sources.filter((source) => source && typeof source.title === 'string' && citations.has(normalizeUrl(source.url)))
         .slice(0, 8).map((source) => ({ title: source.title, url: normalizeUrl(source.url) }));
       const status = ['supported', 'contradicted', 'mixed', 'unverified'].includes(item.status) && sources.length ? item.status : 'unverified';
-      return { excerpt: item.excerpt.trim(), claim: item.claim, status, explanation: sources.length || item.status === 'unverified' ? item.explanation : 'No independently cited evidence was available for this claim.', sources };
+      return { excerpt: item.excerpt.trim(), claim: item.claim, status, explanation: sources.length || item.status === 'unverified' ? item.explanation : localize('No independently cited evidence was available for this claim.', language), sources };
     });
   const rhetoric = result.rhetoric.filter((item) => item && excerptExists(item.excerpt) && typeof item.category === 'string' && typeof item.explanation === 'string')
-    .slice(0, 20).map(({ category, excerpt, explanation }) => ({ category, excerpt: excerpt.trim(), explanation }));
+    .slice(0, 20).map(({ category, categoryId, isReasoningFlaw, excerpt, explanation }) => {
+      const knownCategory = rhetoricCategories.includes(categoryId);
+      return { category, categoryId: knownCategory ? categoryId : 'other', isReasoningFlaw: knownCategory && isReasoningFlaw === true && Boolean(explanation.trim()), excerpt: excerpt.trim(), explanation };
+    });
   return { claims, rhetoric, limitations: result.limitations.filter((item) => typeof item === 'string').slice(0, 10) };
 }
 
-export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), fetchImpl = fetch } = {}) {
+export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), language, fetchImpl = fetch } = {}) {
   if (!apiKey) throw new AppError(503, 'Analysis is unavailable: configure XAI_API_KEY on the server.');
   let response;
   try {
@@ -74,7 +81,7 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
       body: JSON.stringify({
         model, store: false, include: ['no_inline_citations'],
         ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
-        input: [{ role: 'system', content: instruction }, { role: 'user', content: text }],
+        input: [{ role: 'system', content: instruction + rhetoricInstruction + outputLanguageInstruction(language) }, { role: 'user', content: text }],
         tools: [{ type: 'web_search' }],
         text: { format: { type: 'json_schema', name: 'rhetoric_analysis', schema, strict: true } },
       }),
@@ -92,7 +99,7 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
   try {
     const provider = await response.json();
     const output = provider.output?.find((item) => item.type === 'message')?.content?.find((item) => item.type === 'output_text')?.text;
-    return validatedResult(JSON.parse(output), provider, text);
+    return validatedResult(JSON.parse(output), provider, text, language);
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
