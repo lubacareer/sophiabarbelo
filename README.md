@@ -52,3 +52,13 @@ To try Caddy locally, leave `SOPHIA_DOMAIN=localhost` and visit `https://localho
 The server accepts text or retrieves an HTML article from a public HTTP(S) URL. It limits downloads, rejects local and private network destinations, validates redirects and pins DNS addresses when connecting. The configured provider receives the article text and performs web research; the application returns quoted excerpts, claim assessments with source links, and rhetorical observations. Groq uses separate search and structured-analysis calls. Content and prompts sent to the provider are subject to its service terms and data practices. No analysis history is stored by the app.
 
 Search results and model output can be incomplete or mistaken. The app checks that evidence links occur among the provider’s reported citations, but does not independently establish that each source supports a claim. Review the sources and context yourself.
+
+## Languages, demos, and annotations
+
+Use the English / עברית / Русский selector to change the interface and the language of new analysis explanations. Only the language preference is saved locally. Source text and quoted excerpts are never translated. Hebrew uses a right-to-left interface; mixed-language excerpts keep their own direction. Existing analysis keeps its original language until you press Analyze again.
+
+The four built-in examples cover Job’s three friends, Job 38’s whirlwind speech, a Panarion adaptation, and a dated adaptation of Walla’s viral hospital-photo report. Bible passages use the public-domain World English Bible, Westminster Leningrad Codex, and Russian Synodal editions. Every example displays its references and attribution; modern adaptations are explicitly labeled, not presented as quotations. Loading a demo does not submit it or predetermine findings.
+
+After analysis, switch between Edit and Highlights in the input panel. Only exact excerpts with commentary are annotated: lilac means supported by cited evidence, red means a contradicted claim or an explained reasoning failure, and a neutral underline means uncertainty or another rhetorical observation. Numbered links lead to the corresponding findings; color is not the only indicator. Rhetorical techniques do not automatically establish logical errors. Editing the source or loading a new demo clears the previous result.
+
+`POST /api/analyze` accepts optional `language` (`en`, `he`, or `ru`); omitting it preserves the previous input-language behavior. Successful responses add server-authored `sourceText`; rhetoric observations add stable `categoryId` and `isReasoningFlaw` fields while retaining the category display text. These additions do not change citation checks, provider routing, or application limits.

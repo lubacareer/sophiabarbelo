@@ -6,6 +6,7 @@ import { extractArticle, parsePublicUrl } from './article.js';
 import { analyzeConfigured, supportsReasoning } from './provider.js';
 import { createSharedLimiter } from './shared-limiter.js';
 import { AppError } from './errors.js';
+import { languages, localize, requestLanguage } from './localization.js';
 
 const MAX_TEXT = 30_000;
 const RATE_WINDOW_MS = 10 * 60_000;
@@ -51,7 +52,7 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
     if (deployment !== 'local') return next();
     let host;
     try { host = new URL(`http://${req.headers.host}`).hostname.replace(/^\[|\]$/g, '').toLowerCase(); } catch { /* rejected below */ }
-    if (!allowedHosts.has(host)) return res.status(403).json({ error: 'This host is not allowed.' });
+    if (!allowedHosts.has(host)) return res.status(403).json({ error: localize('This host is not allowed.', requestLanguage(req)) });
     return next();
   });
   app.use(express.json({ limit: '256kb' }));
@@ -71,7 +72,10 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
       try { await releaseCurrent(); } catch { /* expiry handles cleanup */ }
     }
     try {
-      const { type, content, reasoningEffort } = req.body || {};
+      const { type, content, reasoningEffort, language } = req.body || {};
+      if (language !== undefined && !languages.includes(language)) {
+        throw new AppError(400, 'Choose a valid interface language.');
+      }
       if (!['text', 'url'].includes(type) || typeof content !== 'string' || !content.trim()) {
         throw new AppError(400, 'Enter text or a public article URL to analyze.');
       }
@@ -104,11 +108,11 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
           if (entry && time >= entry.resetAt) { clients.delete(key); entry = undefined; }
           if (entry && entry.count >= RATE_LIMIT) {
             res.set('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt - time) / 1000))));
-            return res.status(429).json({ error: 'Too many analyses. Please try again later.' });
+            throw new AppError(429, 'Too many analyses. Please try again later.');
           }
           if (anonymousInFlight >= MAX_ANONYMOUS_IN_FLIGHT) {
             res.set('Retry-After', '10');
-            return res.status(429).json({ error: 'The analyzer is busy. Please try again shortly.' });
+            throw new AppError(429, 'The analyzer is busy. Please try again shortly.');
           }
           if (!entry) {
             if (clients.size >= MAX_CLIENTS) {
@@ -116,7 +120,7 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
             }
             if (clients.size >= MAX_CLIENTS) {
               res.set('Retry-After', '60');
-              return res.status(429).json({ error: 'The analyzer is busy. Please try again shortly.' });
+              throw new AppError(429, 'The analyzer is busy. Please try again shortly.');
             }
             entry = { count: 0, resetAt: time + RATE_WINDOW_MS };
             clients.set(key, entry);
@@ -127,20 +131,21 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
         }
       }
       const text = type === 'url' ? await extract(value) : value;
-      const result = await analyze(text, { reasoningEffort });
+      const result = await analyze(text, { reasoningEffort, ...(language !== undefined ? { language } : {}) });
       await release();
-      res.set('Cache-Control', 'no-store').json(result);
+      res.set('Cache-Control', 'no-store').json({ ...result, sourceText: text });
     } catch (error) { await release(); next(error); }
     finally { if (acquired) anonymousInFlight--; }
   });
-  app.use((error, _req, res, _next) => {
+  app.use((error, req, res, _next) => {
+    const language = requestLanguage(req);
     if (error instanceof AppError) {
       if (Number.isSafeInteger(error.retryAfter) && error.retryAfter > 0) res.set('Retry-After', String(error.retryAfter));
-      return res.status(error.status).json({ error: error.message });
+      return res.status(error.status).json({ error: localize(error.message, language) });
     }
-    if (error?.type === 'entity.too.large') return res.status(413).json({ error: 'The submitted text is too large.' });
-    if (error instanceof SyntaxError && error.status === 400) return res.status(400).json({ error: 'The request could not be read.' });
-    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    if (error?.type === 'entity.too.large') return res.status(413).json({ error: localize('The submitted text is too large.', language) });
+    if (error instanceof SyntaxError && error.status === 400) return res.status(400).json({ error: localize('The request could not be read.', language) });
+    return res.status(500).json({ error: localize('Something went wrong. Please try again.', language) });
   });
   return app;
 }
