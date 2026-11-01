@@ -41,6 +41,7 @@ test('Job’s friends remain three separately attributed passages in each langua
   assert.match(preset.locales.en.attribution, /public-domain/u);
   assert.match(preset.locales.en.attribution, /opening quotation mark.*omitted/u);
   const [firstEnglishPassage] = preset.locales.en.text.split('\n\n');
+  assert.doesNotMatch(firstEnglishPassage, /Job 4:7–9\s*["“]/u);
   assert.equal((firstEnglishPassage.match(/“/gu) || []).length, (firstEnglishPassage.match(/”/gu) || []).length);
   assert.match(preset.locales.he.attribution, /ברשות הציבור/u);
   assert.match(preset.locales.ru.attribution, /общественное достояние/u);
