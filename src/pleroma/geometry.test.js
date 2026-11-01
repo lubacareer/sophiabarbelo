@@ -114,6 +114,24 @@ test('the planetary overlay remains separate from the seven heavens and adds no 
   }
 });
 
+test('planetary comparison markers leave room for source nodes and labels in the 2D map', () => {
+  const tradition = getTradition('john');
+  // Planet hit radii are 28 units and source hit radii reach 33; leave extra room for labels.
+  const minimumSeparation = 120;
+  for (const paired of [false, true]) {
+    const scene = getScene(tradition, { planets: true, paired });
+    const planets = scene.markers.filter(({ kind }) => kind === 'planet');
+    const sourceMarkers = scene.markers.filter(({ kind }) => kind !== 'planet');
+    for (const planet of planets) {
+      for (const source of sourceMarkers) {
+        const distance = Math.hypot(...planet.position.map((value, axis) => value - source.position[axis]));
+        assert.ok(distance >= minimumSeparation,
+          `${planet.id} overlaps ${source.id} with paired aspects ${paired}: ${distance.toFixed(2)} units`);
+      }
+    }
+  }
+});
+
 test('all source layers have finite focus targets without changing selection identity', () => {
   for (const tradition of traditions) {
     const scene = getScene(tradition);

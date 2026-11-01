@@ -34,7 +34,7 @@ function positionOf(node, tradition, index) {
   const order = Number.isFinite(node.order) ? node.order : index;
   if (node.kind === 'planet') {
     const radius = 2.0 + order * 0.52;
-    return { position: [990, 220 + order * 62], world: [Math.cos(0.48) * radius, 0.65, Math.sin(0.48) * radius] };
+    return { position: [110, 220 + order * 62], world: [Math.cos(0.48) * radius, 0.65, Math.sin(0.48) * radius] };
   }
   if (tradition.id === 'john') {
     if (johnGroups[node.id]) return johnGroups[node.id];

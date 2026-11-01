@@ -1,15 +1,14 @@
 # Pleroma 3D design and interaction specification
 
-Approved visual references:
+Current implementation references:
 
-- Desktop: exec-06db24fe-dd65-4df6-b7f0-80c45ec4b344.png
-- Mobile: exec-3e43c6de-86bf-4679-b632-6d1e6dce148c.png
+- [Desktop screenshot](images/pleroma-desktop.png)
+- [Mobile screenshot](images/pleroma-mobile.png)
 
-The reference files are in the Codex generated_images folder for this chat.
-They define the visualization treatment, not authoritative source text or entity
-topology. The subsequent approved UI revision matches the main-branch analyzer:
-mint surfaces and Nunito throughout replace the concepts' dark/gold chrome and
-serif typography. Source records and deterministic layouts supply the diagrams.
+These repository screenshots capture the implemented, approved mint/Nunito UI
+revision. The UI matches the main-branch analyzer, with mint surfaces and Nunito
+throughout. The screenshots document the visualization treatment; source records
+and deterministic layouts supply the diagrams and their source-based topology.
 
 ## Visual system
 
@@ -44,9 +43,9 @@ Inspector: selected entity, category, Source / Interpretation, exact passage,
 edition/reference, translator and rights, Read full passage / collapse,
 Open source, close control. Textual restorations are preserved.
 
-Functional additions to the screenshots: an expandable overlay-options menu,
-a keyboard-accessible entity list, clear WebGL fallback status, and provenance
-for every source. These are required by the approved interaction plan.
+The explorer provides an expandable overlay-options menu, a keyboard-accessible
+entity list, clear WebGL fallback status, and provenance for every source.
+These capabilities are required by the approved interaction plan.
 
 ## Motion and rendering
 
@@ -59,8 +58,8 @@ Geometry and controls are code-native; the screenshots are never used as UI.
 
 ## Review requirements
 
-Compare the main-branch analyzer's UI palette and typography with desktop and
-mobile renders, and compare the visualization with its pre-restyle screenshot:
-layout, typography, palette, curved geometry/light treatment, inspector/source
-readability, control spacing, responsive flow and RTL. Document concrete fixes
-and intentional source-data differences in the PR validation notes.
+Compare desktop and mobile renders with the repository screenshots above and
+the main-branch analyzer's UI palette and typography. Review layout, typography,
+palette, curved geometry/light treatment, inspector/source readability, control
+spacing, responsive flow and RTL. Document concrete fixes and intentional
+source-data differences in the PR validation notes.

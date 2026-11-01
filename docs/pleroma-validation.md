@@ -5,7 +5,7 @@ resources, deployment settings, or billing were changed for this feature.
 
 ## Automated checks
 
-- Full Node test suite: 121 passing tests, including 26 new catalog, geometry,
+- Full Node test suite: 122 passing tests, including 27 new catalog, geometry,
   localization, and URL-state checks.
 - Production Vite build and `git diff --check` pass.
 - Catalog: 57 canonical entities (32 John, 11 Ezekiel, 10 Tree, 4 Plotinus),
@@ -72,8 +72,8 @@ reading panel. Tradition changes fade scenes instead of equating their figures.
 - Compared the rendered analyzer and `origin/main`'s palette/type rules with
   the explorer at desktop, 390px, and 320px. Updated desktop/mobile screenshots
   show green selections, rounded mint controls, and the Nunito reading panel.
-- Both renderer components, geometry, source catalog, and dependencies are
-  byte-identical to the pre-restyle commit. Renderer CSS changes only three
+- At the mint restyle revision, both renderer components, geometry, source catalog,
+  and dependencies were byte-identical to the pre-restyle commit. Renderer CSS changed only three
   font-family declarations. Its dimensions, colors, atmosphere, and effects
   remain unchanged; the canvas background computes to `rgb(8, 23, 19)`.
 - Browser checks exercised all four scenes in both modes, overlays, source
@@ -85,7 +85,31 @@ reading panel. Tradition changes fade scenes instead of equating their figures.
 - UI text contrast: dark ink on mint 15.9:1, secondary text 7.23:1, and white
   on selected green 6.22:1. Page focus uses green; canvas controls and diagram
   labels retain bright focus indicators against the dark background.
-- The full 121-test suite, production build, and whitespace checks passed again.
+- The full test suite, production build, and whitespace checks passed again.
+
+### Review correction verification
+
+- The design specification now links to the tracked desktop/mobile screenshots;
+  both relative targets resolve. Chat-only filenames and unavailable comparison
+  images were removed.
+- Analyze and brand clicks preserve native finding anchors, silent
+  `history.replaceState` hash updates, and cleared hashes without adding history
+  entries. The latest anchor and fixture results survive analyzer/explorer
+  navigation and Back/Forward through multiple anchors, modes, and selected nodes.
+- Planets occupy a separate left column in SVG. The geometry regression requires
+  at least 120 logical units from every nonplanet marker with paired aspects off
+  and on; it fails against the old layout. 3D coordinates, rings, source identities,
+  and relationships remain unchanged.
+- Decorative halos, bloom/selection rings, and traveling sparks no longer take
+  pointer hits. Browser hit testing and actual marker-center clicks selected all
+  seven planets and seven heavens correctly, including after prior selections,
+  with paired aspects both off and on.
+- Planet labels sit beside the column, facing inward in English, Hebrew, and
+  Russian. All nine locale/viewport combinations (1536px, 390px, 320px) had no
+  clipped planet labels, planet-label/core intersections, or page overflow.
+  Selection, layer focus, zoom, and Fit were exercised.
+- Browser console checks found no application errors. The analyzer tests used one
+  deterministic local mock response; no model requests or credits were used.
 
 ## Practical limits
 

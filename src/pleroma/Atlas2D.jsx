@@ -65,28 +65,31 @@ export default function Atlas2D({ tradition, language = 'en', selectedId, onSele
         const size = marker.kind === 'sefirah' ? 20 : marker.major ? core ? 23 : 18 : marker.aspect ? 8 : 9;
         const visibleLabel = !marker.aspect && (marker.major || active);
         const heavenDim = marker.kind === 'heaven' && focusLayer !== 'heavens' && !active;
-        const labelAbove = ['invisible-spirit', 'armozel', 'throne', 'expanse'].includes(marker.canonicalParentId) || marker.kind === 'planet';
+        const labelAbove = ['invisible-spirit', 'armozel', 'throne', 'expanse'].includes(marker.canonicalParentId);
         const labelLines = marker.kind === 'sefirah' ? label.split(' · ') : [label];
-        const labelY = labelAbove ? -size - 18 : size + 29;
-        const labelAnchor = marker.position[0] > 850 ? 'end' : marker.position[0] < 250 ? 'start' : 'middle';
+        const labelX = marker.kind === 'planet' ? size + 14 : 0;
+        const labelY = marker.kind === 'planet' ? 8 : labelAbove ? -size - 18 : size + 29;
+        const labelAnchor = marker.kind === 'planet'
+          ? language === 'he' ? 'end' : 'start'
+          : marker.position[0] > 850 ? 'end' : marker.position[0] < 250 ? 'start' : 'middle';
         return <g key={marker.id} role="button" tabIndex={0} aria-label={marker.aspect ? `${label} — ${marker.aspect === 'masculine' ? textFor({ en: 'masculine aspect', he: 'היבט זכרי', ru: 'мужской аспект' }, language) : textFor({ en: 'feminine aspect', he: 'היבט נקבי', ru: 'женский аспект' }, language)}` : label}
           aria-pressed={active} data-node-id={marker.canonicalParentId} className="atlas-svg-node" transform={`translate(${marker.position.join(' ')})`} opacity={heavenDim ? .18 : 1}
           onClick={(event) => select(event, marker.canonicalParentId)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(event, marker.canonicalParentId); } }}>
           <title>{label}</title>
           <circle r={Math.max(23, size + 10)} fill="transparent" />
-          <circle r={size * (active || core ? 5.7 : marker.major ? 4 : 3.2)} fill={`url(#${uid}-halo)`} opacity={active || core ? .9 : .56} aria-hidden="true" />
-          {(active || marker.major) && <circle r={size + 3} fill="none" stroke="#f9cd70" strokeWidth="3.5" opacity=".55" filter={`url(#${uid}-bloom)`} aria-hidden="true" />}
-          {active && <circle r={size + 6} fill="none" stroke="#fff0be" strokeWidth="1.5" opacity=".95" />}
+          <circle r={size * (active || core ? 5.7 : marker.major ? 4 : 3.2)} fill={`url(#${uid}-halo)`} opacity={active || core ? .9 : .56} aria-hidden="true" pointerEvents="none" />
+          {(active || marker.major) && <circle r={size + 3} fill="none" stroke="#f9cd70" strokeWidth="3.5" opacity=".55" filter={`url(#${uid}-bloom)`} aria-hidden="true" pointerEvents="none" />}
+          {active && <circle r={size + 6} fill="none" stroke="#fff0be" strokeWidth="1.5" opacity=".95" aria-hidden="true" pointerEvents="none" />}
           <circle r={size} fill={marker.aspect === 'feminine' || marker.kind === 'planet' || marker.canonicalParentId === 'invisible-spirit' ? `url(#${uid}-sage)` : `url(#${uid}-node)`} stroke={marker.aspect === 'feminine' ? '#e1f7e7' : '#ffe6a0'} strokeWidth="1.7" />
           {marker.kind === 'sefirah' && <text className="atlas-svg-number" y="6" textAnchor="middle" aria-hidden="true">{marker.node.order}</text>}
-          {visibleLabel && <text className={`atlas-svg-label${core ? ' atlas-svg-label-core' : ''}`} y={labelY} textAnchor={labelAnchor} direction={language === 'he' ? 'rtl' : 'ltr'}>{labelLines.map((line, index) => <tspan key={index} x="0" dy={index ? '1.15em' : '0'} fontSize={index ? '.9em' : undefined}>{line}</tspan>)}</text>}
+          {visibleLabel && <text className={`atlas-svg-label${core ? ' atlas-svg-label-core' : ''}`} y={labelY} textAnchor={labelAnchor} direction={language === 'he' ? 'rtl' : 'ltr'}>{labelLines.map((line, index) => <tspan key={index} x={labelX} dy={index ? '1.15em' : '0'} fontSize={index ? '.9em' : undefined}>{line}</tspan>)}</text>}
         </g>;
       })}</g>
       {!reducedMotion && selected && <g className="atlas-selection-burst" key={`${eventKey}-${selectedId}`} transform={`translate(${selected.position.join(' ')})`} aria-hidden="true">
         <circle r="75" fill={`url(#${uid}-halo)`} className="atlas-burst-disc" />
         {Array.from({ length: 9 }, (_, i) => <path key={i} d={curvePath([0, 0], [Math.cos(i * 2.4) * 103, Math.sin(i * 2.4) * 103], .3)} fill="none" stroke="#ffdfa0" strokeWidth="1.3" className="atlas-burst-ray" style={{ '--ray-delay': `${i * 20}ms` }} />)}
       </g>}
-      {!reducedMotion && <g key={`sparks-${eventKey}`} aria-hidden="true">{scene.edges.filter((edge) => edge.from.id === selectedId || edge.to.id === selectedId).slice(0, 7).map((edge) => <circle key={edge.id} r="3.6" fill="#fff5cd" className="atlas-moving-spark"><animateMotion dur="1.2s" repeatCount="1" path={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="freeze" /></circle>)}</g>}
+      {!reducedMotion && <g key={`sparks-${eventKey}`} aria-hidden="true" pointerEvents="none">{scene.edges.filter((edge) => edge.from.id === selectedId || edge.to.id === selectedId).slice(0, 7).map((edge) => <circle key={edge.id} r="3.6" fill="#fff5cd" className="atlas-moving-spark"><animateMotion dur="1.2s" repeatCount="1" path={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="freeze" /></circle>)}</g>}
     </g>
   </svg>;
 }

@@ -183,7 +183,7 @@ export default function App() {
     const previous = routeRef.current;
     const next = { ...previous, ...changes };
     routeRef.current = next;
-    if (previous.view === 'analyze' && next.view === 'pleroma') analyzerHash.current = window.location.hash;
+    if (previous.view === 'analyze') analyzerHash.current = window.location.hash;
     const query = explorerSearch(window.location.search, next);
     const hash = next.view === 'analyze' ? analyzerHash.current : '';
     const url = window.location.pathname + query + hash;
