@@ -60,6 +60,32 @@ test('public deployment uses only GPT-OSS 120B and never calls xAI', async () =>
   });
 });
 
+test('public OpenAI use requires explicit cost opt-in and never falls back', async () => {
+  await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_PUBLIC_PROVIDER: 'openai', SOPHIA_OPENAI_COSTS_CONFIRMED: undefined }, async () => {
+    const calls = [];
+    const openai = async (_text, options) => { calls.push(options); return result(); };
+    const groq = async () => { throw new Error('Unexpected fallback'); };
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { openai, groq }), /costs are not configured/);
+    assert.equal(calls.length, 0);
+    process.env.SOPHIA_OPENAI_COSTS_CONFIRMED = 'true';
+    assert.deepEqual(await analyzeConfigured('Claim', { language: 'ru' }, { openai, groq }), result());
+    assert.deepEqual(calls, [{ language: 'ru', model: 'gpt-6-luna', requireCitations: true }]);
+    await assert.rejects(() => analyzeConfigured('Claim', { reasoningEffort: 'high' }, { openai, groq }), /Grok only/);
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { openai: async () => { throw new AppError(503, 'OpenAI unavailable'); }, groq }), /OpenAI unavailable/);
+  });
+});
+
+test('unknown public provider fails closed, and local OpenAI forwards language', async () => {
+  await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_PUBLIC_PROVIDER: 'unknown' }, async () => {
+    await assert.rejects(() => analyzeConfigured('Claim'), /public provider is not configured/);
+  });
+  await withEnvironment({ VERCEL: undefined, ANALYSIS_PROVIDER: 'openai' }, async () => {
+    assert.equal(supportsReasoning(), false);
+    const openai = async (_text, options) => { assert.deepEqual(options, { language: 'he' }); return result(); };
+    assert.deepEqual(await analyzeConfigured('Claim', { language: 'he' }, { openai }), result());
+  });
+});
+
 test('deployed Groq fails closed without confirmed free access and does not fall back to a smaller model', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: undefined }, async () => {
     let called = false;

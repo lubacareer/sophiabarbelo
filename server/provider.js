@@ -1,6 +1,7 @@
 import { AppError } from './errors.js';
 import { analyzeWithGrok } from './grok.js';
 import { analyzeWithGroq } from './groq.js';
+import { analyzeWithOpenAI } from './openai.js';
 import { localize } from './localization.js';
 
 const freeModel = 'openai/gpt-oss-120b';
@@ -27,11 +28,19 @@ async function freeResearch(text, groq, options) {
   return groq(text, { ...(options.language !== undefined ? { language: options.language } : {}), model: freeModel, requireCitations: true, maxRetryWaitSeconds: 30 });
 }
 
-export async function analyzeConfigured(text, options = {}, { grok = analyzeWithGrok, groq = analyzeWithGroq } = {}) {
+export async function analyzeConfigured(text, options = {}, { grok = analyzeWithGrok, groq = analyzeWithGroq, openai = analyzeWithOpenAI } = {}) {
   const role = deploymentRole();
   if (role === 'public') {
     if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only.');
-    return freeResearch(text, groq, options);
+    const publicProvider = (process.env.SOPHIA_PUBLIC_PROVIDER || 'groq').toLowerCase();
+    if (publicProvider === 'groq') return freeResearch(text, groq, options);
+    if (publicProvider === 'openai') {
+      if (process.env.SOPHIA_OPENAI_COSTS_CONFIRMED !== 'true') {
+        throw new AppError(503, 'Analysis is unavailable: OpenAI usage costs are not configured.');
+      }
+      return openai(text, { ...(options.language !== undefined ? { language: options.language } : {}), model: 'gpt-6-luna', requireCitations: true });
+    }
+    throw new AppError(503, 'Analysis is unavailable: the public provider is not configured.');
   }
   if (role === 'admin') {
     try { return await grok(text, { ...options, model: 'grok-4.7' }); }
@@ -48,5 +57,9 @@ export async function analyzeConfigured(text, options = {}, { grok = analyzeWith
     if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only. Select Default for Groq.');
     return groq(text, options);
   }
-  throw new AppError(503, 'Analysis is unavailable: configure ANALYSIS_PROVIDER as groq or xai.');
+  if (provider === 'openai') {
+    if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only.');
+    return openai(text, options);
+  }
+  throw new AppError(503, 'Analysis is unavailable: configure ANALYSIS_PROVIDER as groq, openai, or xai.');
 }

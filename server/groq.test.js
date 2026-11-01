@@ -192,7 +192,7 @@ test('default app uses xAI and rejects unsupported provider configuration', asyn
     };
     assert.deepEqual(await post(), { status: 503, body: { error: 'Analysis is unavailable: configure XAI_API_KEY on the server.' } });
     process.env.ANALYSIS_PROVIDER = 'unsupported';
-    assert.deepEqual(await post(), { status: 503, body: { error: 'Analysis is unavailable: configure ANALYSIS_PROVIDER as groq or xai.' } });
+    assert.deepEqual(await post(), { status: 503, body: { error: 'Analysis is unavailable: configure ANALYSIS_PROVIDER as groq, openai, or xai.' } });
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (previousProvider === undefined) delete process.env.ANALYSIS_PROVIDER;
