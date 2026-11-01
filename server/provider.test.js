@@ -48,59 +48,73 @@ test('deployment reasoning controls follow the model fixed by the deployment rol
   });
 });
 
-test('public deployment never uses xAI and falls back to a second free research model on rate limits', async () => {
+test('public deployment uses only GPT-OSS 120B and never calls xAI', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: 'true', XAI_API_KEY: 'not-for-public', ANALYSIS_PROVIDER: 'xai' }, async () => {
     const calls = [];
     const grok = async () => { throw new Error('xAI must never be called'); };
-    const groq = async (_text, options) => {
-      calls.push(options);
-      if (calls.length === 1) throw new AppError(429, 'Rate limited');
-      return result();
-    };
+    const groq = async (_text, options) => { calls.push(options); return result(); };
     assert.equal(supportsReasoning(), false);
-    const output = await analyzeConfigured('Claim', {}, { grok, groq });
-    assert.deepEqual(calls.map((item) => item.model), ['openai/gpt-oss-20b', 'openai/gpt-oss-120b']);
-    assert.ok(calls.every((item) => item.requireCitations && item.maxRetryWaitSeconds === 30));
-    assert.match(output.limitations[0], /fallback model/);
+    assert.deepEqual(await analyzeConfigured('Claim', { language: 'he' }, { grok, groq }), result());
+    assert.deepEqual(calls, [{ model: 'openai/gpt-oss-120b', language: 'he', requireCitations: true, maxRetryWaitSeconds: 30 }]);
     await assert.rejects(() => analyzeConfigured('Claim', { reasoningEffort: 'high' }, { grok, groq }), /Grok only/);
   });
 });
 
-test('deployed Groq research fails closed without confirmed free access and retries unavailable research only', async () => {
+test('public OpenAI use requires explicit cost opt-in and never falls back', async () => {
+  await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_PUBLIC_PROVIDER: 'openai', SOPHIA_OPENAI_COSTS_CONFIRMED: undefined }, async () => {
+    const calls = [];
+    const openai = async (_text, options) => { calls.push(options); return result(); };
+    const groq = async () => { throw new Error('Unexpected fallback'); };
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { openai, groq }), /costs are not configured/);
+    assert.equal(calls.length, 0);
+    process.env.SOPHIA_OPENAI_COSTS_CONFIRMED = 'true';
+    assert.deepEqual(await analyzeConfigured('Claim', { language: 'ru' }, { openai, groq }), result());
+    assert.deepEqual(calls, [{ language: 'ru', model: 'gpt-6-luna', requireCitations: true }]);
+    await assert.rejects(() => analyzeConfigured('Claim', { reasoningEffort: 'high' }, { openai, groq }), /Grok only/);
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { openai: async () => { throw new AppError(503, 'OpenAI unavailable'); }, groq }), /OpenAI unavailable/);
+  });
+});
+
+test('unknown public provider fails closed, and local OpenAI forwards language', async () => {
+  await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_PUBLIC_PROVIDER: 'unknown' }, async () => {
+    await assert.rejects(() => analyzeConfigured('Claim'), /public provider is not configured/);
+  });
+  await withEnvironment({ VERCEL: undefined, ANALYSIS_PROVIDER: 'openai' }, async () => {
+    assert.equal(supportsReasoning(), false);
+    const openai = async (_text, options) => { assert.deepEqual(options, { language: 'he' }); return result(); };
+    assert.deepEqual(await analyzeConfigured('Claim', { language: 'he' }, { openai }), result());
+  });
+});
+
+test('deployed Groq fails closed without confirmed free access and does not fall back to a smaller model', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: undefined }, async () => {
     let called = false;
     await assert.rejects(() => analyzeConfigured('Claim', {}, { groq: async () => { called = true; return result(); } }), /not configured/);
     assert.equal(called, false);
     process.env.SOPHIA_GROQ_FREE_CONFIRMED = 'true';
-    let attempts = 0;
-    const unavailable = new AppError(503, 'No research');
-    unavailable.providerResearchUnavailable = true;
-    const output = await analyzeConfigured('Claim', {}, { groq: async () => { if (++attempts === 1) throw unavailable; return result(); } });
-    assert.equal(attempts, 2);
-    assert.match(output.limitations[0], /fallback/);
-    attempts = 0;
-    await assert.rejects(() => analyzeConfigured('Claim', {}, { groq: async () => { attempts++; throw new AppError(503, 'Invalid credentials'); } }), /Invalid credentials/);
-    assert.equal(attempts, 1);
+    for (const error of [new AppError(429, 'Rate limited'), Object.assign(new AppError(503, 'No research'), { providerResearchUnavailable: true }), new AppError(503, 'Invalid credentials')]) {
+      const calls = [];
+      await assert.rejects(() => analyzeConfigured('Claim', {}, { groq: async (_text, options) => { calls.push(options); throw error; } }), (actual) => actual === error);
+      assert.deepEqual(calls.map(({ model }) => model), ['openai/gpt-oss-120b']);
+    }
   });
 });
 
-test('a Groq browser tool failure falls back to the second model without exposing provider details', async () => {
+test('a Groq browser tool failure returns an unavailable error without provider details or another model', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: 'true' }, async () => {
     const calls = [];
     const fetchImpl = async (_url, options) => {
-      const body = JSON.parse(options.body);
-      calls.push(body);
-      if (calls.length === 1) return { ok: false, status: 400, json: async () => ({ error: { code: 'tool_use_failed', failed_generation: 'private provider detail' } }) };
-      if (calls.length === 2) return { ok: true, json: async () => ({ choices: [{ message: {
-        content: 'Research', executed_tools: [{ search_results: { results: [{ url: 'https://example.org/source' }] } }],
-      } }] }) };
-      return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(result()) } }] }) };
+      calls.push(JSON.parse(options.body));
+      return { ok: false, status: 400, json: async () => ({ error: { code: 'tool_use_failed', failed_generation: 'private provider detail' } }) };
     };
     const groq = (text, options) => analyzeWithGroq(text, { ...options, apiKey: 'test', fetchImpl });
-    const output = await analyzeConfigured('Claim', {}, { groq });
-    assert.deepEqual(calls.map((body) => body.model), ['openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'openai/gpt-oss-120b']);
-    assert.match(output.limitations[0], /fallback model/);
-    assert.doesNotMatch(JSON.stringify(output), /private provider detail/);
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { groq }), (error) => {
+      assert.equal(error.providerResearchUnavailable, true);
+      assert.equal(error.status, 503);
+      assert.doesNotMatch(error.message, /private provider detail/);
+      return true;
+    });
+    assert.deepEqual(calls.map((body) => body.model), ['openai/gpt-oss-120b']);
   });
 });
 
@@ -128,7 +142,7 @@ test('other Groq 400 errors and credentials do not trigger a model fallback', as
         return true;
       });
       assert.equal(calls.length, scenario === 'analysis-tool-error' ? 2 : 1, scenario);
-      assert.ok(calls.every((body) => body.model === 'openai/gpt-oss-20b'), scenario);
+      assert.ok(calls.every((body) => body.model === 'openai/gpt-oss-120b'), scenario);
     }
   });
 });
@@ -142,7 +156,7 @@ test('admin uses Grok 4.7 and only falls back to confirmed free research on prov
     const groq = async (_text, options) => { calls.push(options); return result(); };
     assert.equal(supportsReasoning(), true);
     const output = await analyzeConfigured('Claim', { reasoningEffort: 'high' }, { grok, groq });
-    assert.deepEqual(calls, [{ model: 'grok-4.7', reasoningEffort: 'high' }, { model: 'openai/gpt-oss-20b', requireCitations: true, maxRetryWaitSeconds: 30 }]);
+    assert.deepEqual(calls, [{ model: 'grok-4.7', reasoningEffort: 'high' }, { model: 'openai/gpt-oss-120b', requireCitations: true, maxRetryWaitSeconds: 30 }]);
     assert.match(output.limitations[0], /Grok reached its usage limit/);
     await assert.rejects(() => analyzeConfigured('Claim', {}, { grok: async () => { throw new AppError(503, 'Invalid credentials'); }, groq: async () => { throw new Error('Unexpected fallback'); } }), /Invalid credentials/);
   });

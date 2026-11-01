@@ -93,18 +93,16 @@ test('HTTP errors localize validation, URL failures and store failures without c
   });
 });
 
-test('language is forwarded through both free models, administrator fallback and direct local providers', async () => {
+test('language is forwarded through the free model, administrator fallback and direct local providers', async () => {
   await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: 'true' }, async () => {
     const calls = [];
-    const output = await analyzeConfigured('טענה', { language: 'he' }, { groq: async (_text, options) => {
+    await analyzeConfigured('טענה', { language: 'he' }, { groq: async (_text, options) => {
       calls.push(options);
-      if (calls.length === 1) throw new AppError(429, 'Rate limited');
       return emptyResult();
     } });
     assert.deepEqual(calls.map(({ model, language }) => ({ model, language })), [
-      { model: 'openai/gpt-oss-20b', language: 'he' }, { model: 'openai/gpt-oss-120b', language: 'he' },
+      { model: 'openai/gpt-oss-120b', language: 'he' },
     ]);
-    assert.equal(output.limitations[0], localize('The primary research model was unavailable, so a free fallback model was used.', 'he'));
     process.env.SOPHIA_DEPLOYMENT_ROLE = 'admin';
     const adminCalls = [];
     const error = new AppError(503, 'Rate limited');

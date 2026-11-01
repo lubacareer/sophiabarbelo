@@ -37,6 +37,14 @@ function SourceLinks({ sources, language }) {
   </div>;
 }
 
+function InlineCitations({ sources, language }) {
+  const links = (sources ?? []).filter((source) => safeSourceUrl(source.url));
+  if (!links.length) return null;
+  return <span className="inline-citations"> {links.map((source, index) => <span key={`${source.url}-${index}`}>
+    {'['}<a href={safeSourceUrl(source.url)} target="_blank" rel="noopener noreferrer" aria-label={`${translate(language, 'sources')}: ${source.title || source.url}`}>{index + 1}</a>{']'}
+  </span>)}</span>;
+}
+
 function ClaimCard({ claim, index, language, analysisLanguage }) {
   const status = statuses.includes(claim.status) ? claim.status : 'unverified';
   return <article className="finding" id={`claim-${index}`} tabIndex={-1}>
@@ -45,7 +53,7 @@ function ClaimCard({ claim, index, language, analysisLanguage }) {
       <span className={`status status-${status}`}>{translate(language, status)}</span>
     </div>
     {claim.excerpt && <blockquote className="claim-excerpt" dir="auto">“{claim.excerpt}”</blockquote>}
-    <p dir="auto" lang={analysisLanguage}>{claim.explanation}</p>
+    <p dir="auto" lang={analysisLanguage}>{claim.explanation}<InlineCitations sources={claim.sources} language={language} /></p>
     <SourceLinks sources={claim.sources} language={language} />
   </article>;
 }
