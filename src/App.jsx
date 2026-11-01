@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import mirrorArtwork from './assets/sophia-mirror.png';
 import { languages, languageNames, localeStorageKey, savedLanguage, translate } from './i18n.js';
 import { presets } from './presets.js';
 import { buildAnnotations, withFindingLinks } from './annotations.js';
+import { explorerSearch, readExplorerRoute } from './pleroma/state.js';
+
+const Explorer = lazy(() => import('./pleroma/Explorer.jsx'));
+const navigation = {
+  en: { analyze: 'Analyze', pleroma: 'Pleroma 3D', loading: 'Opening the cosmology explorer…', subtitle: 'Explore four traditions of the cosmos.' },
+  he: { analyze: 'ניתוח', pleroma: 'פלרומה בתלת־ממד', loading: 'פותחים את מפת הקוסמולוגיות…', subtitle: 'גלו ארבע מסורות של היקום.' },
+  ru: { analyze: 'Анализ', pleroma: 'Плерома 3D', loading: 'Открываем карту космологий…', subtitle: 'Исследуйте четыре представления о космосе.' },
+};
 
 const statuses = ['supported', 'contradicted', 'mixed', 'unverified'];
 const categoryIds = ['scapegoating', 'selective_piety', 'shame_fear', 'demagogy', 'victim_blaming', 'intimidation', 'faulty_reasoning', 'other'];
@@ -155,6 +163,10 @@ function DemoPresets({ language, disabled, onSelect }) {
 
 export default function App() {
   const [language, setLanguage] = useState(savedLanguage);
+  const [route, setRoute] = useState(() => readExplorerRoute(window.location.search, window.matchMedia('(max-width: 760px)').matches ? '2d' : '3d'));
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const analyzerHash = useRef(route.view === 'analyze' ? window.location.hash : '');
   const [type, setType] = useState('text');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
@@ -167,10 +179,39 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const t = (key, values) => translate(language, key, values);
 
+  const changeRoute = useCallback((changes, replace = false) => {
+    const previous = routeRef.current;
+    const next = { ...previous, ...changes };
+    routeRef.current = next;
+    if (previous.view === 'analyze') analyzerHash.current = window.location.hash;
+    const query = explorerSearch(window.location.search, next);
+    const hash = next.view === 'analyze' ? analyzerHash.current : '';
+    const url = window.location.pathname + query + hash;
+    if (url !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history[replace ? 'replaceState' : 'pushState'](null, '', url);
+    }
+    setRoute(next);
+  }, []);
+
+  useEffect(() => {
+    const pop = () => {
+      const next = readExplorerRoute(window.location.search, window.matchMedia('(max-width: 760px)').matches ? '2d' : '3d');
+      if (next.view === 'analyze') analyzerHash.current = window.location.hash;
+      setRoute(next);
+    };
+    window.addEventListener('popstate', pop);
+    return () => window.removeEventListener('popstate', pop);
+  }, []);
+
+  useEffect(() => {
+    document.body.dataset.section = route.view;
+    document.title = route.view === 'pleroma' ? `${navigation[language].pleroma} · Sophia’s Mirror` : 'Sophia’s Mirror';
+    document.querySelector('meta[name="description"]')?.setAttribute('content', route.view === 'pleroma' ? navigation[language].subtitle : translate(language, 'analysisIntro'));
+  }, [route.view, language]);
+
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'he' ? 'rtl' : 'ltr';
-    document.querySelector('meta[name="description"]')?.setAttribute('content', translate(language, 'analysisIntro'));
     try { window.localStorage.setItem(localeStorageKey, language); } catch { /* Locale persistence is optional. */ }
   }, [language]);
 
@@ -217,7 +258,21 @@ export default function App() {
     } finally { setIsLoading(false); }
   }
 
-  return <main className="shell">
+  return <>
+    <header className={'site-nav' + (route.view === 'pleroma' ? ' is-pleroma' : '')}>
+      <button type="button" className="site-brand" onClick={() => changeRoute({ view: 'analyze' })}>Sophia’s Mirror</button>
+      <nav aria-label={navigation[language].analyze + ' / ' + navigation[language].pleroma}>
+        <button type="button" aria-current={route.view === 'analyze' ? 'page' : undefined} onClick={() => changeRoute({ view: 'analyze' })}>{navigation[language].analyze}</button>
+        <button type="button" aria-current={route.view === 'pleroma' ? 'page' : undefined} onClick={() => changeRoute({ view: 'pleroma' })}>{navigation[language].pleroma}</button>
+      </nav>
+      {route.view === 'pleroma' && <label className="site-language"><span className="sr-only">{t('language')}</span>
+        <select aria-label={t('language')} value={language} onChange={(event) => setLanguage(event.target.value)}>
+          {languages.map((code) => <option key={code} value={code} lang={code}>{languageNames[code]}</option>)}
+        </select>
+      </label>}
+    </header>
+    {route.view === 'pleroma' && <Suspense fallback={<p className="explorer-loading" role="status">{navigation[language].loading}</p>}><Explorer language={language} route={route} onRouteChange={changeRoute} /></Suspense>}
+    <main className="shell" hidden={route.view !== 'analyze'}>
     <header className="masthead">
       <div className="masthead-copy">
         <label className="language-selector">{t('language')}
@@ -264,5 +319,6 @@ export default function App() {
       {error && <p className="form-message error" role="alert" dir="auto" lang={error.language || language}>{error.key ? t(error.key) : error.message}</p>}
     </form>
     <Results result={result} isLoading={isLoading} language={language} />
-  </main>;
+    </main>
+  </>;
 }

@@ -2,6 +2,16 @@
 
 Sophia’s Mirror explores factual claims and rhetorical techniques in text or a public article. It uses web search to find relevant sources, and presents rhetorical observations as interpretations—not proof of intent or a guarantee of neutrality. Claims without sufficient cited evidence remain unverified.
 
+## Pleroma 3D
+
+Open **Pleroma 3D** in the navigation to explore the Secret Book of John, Ezekiel’s wheels, a ten-sefirot Tree of Life schematic, and Plotinus’s principles. The explorer has a Three.js / React Three Fiber 3D view and an interactive SVG 2D view, with exact credited source passages and separate English, Hebrew, and Russian editorial explanations. Mobile starts in 2D; unavailable or lost WebGL falls back to the same interactive map and source inspector.
+
+All diagram connections are curved. Selecting a figure illuminates it and briefly sends light along its connections; reduced-motion preferences retain a static view. Zoom, Fit, layer controls, and List view provide alternatives to dragging the 3D camera. Switching back to Analyze preserves the current input and results.
+
+Interpretive overlays are optional and off by default: twelve sourced aeons can be drawn as twenty-four modern masculine/feminine aspect markers; Cicero’s classical planetary ordering is shown separately from the seven Gnostic heavens; torus forms are a modern geometric reading of Ezekiel’s wheels. Spatial layouts and Tree connectors are editorial reconstructions, not claims that these traditions describe identical entities or physical cosmic distances.
+
+Source passages and graphics are bundled locally. Exploring does not call an analysis provider, use Redis, or consume model credits. The 3D renderer loads only when 3D is selected. Bookmarkable query parameters preserve the site's pathname and analysis finding anchors. See [source editions and reuse provenance](docs/pleroma-sources.md) and [the design specification](docs/pleroma-design.md).
+
 ## Run locally
 
 Requirements: Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and an xAI API key with access to Grok 4.7, web search, and structured outputs.
