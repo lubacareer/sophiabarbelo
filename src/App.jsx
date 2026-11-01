@@ -116,7 +116,7 @@ function HighlightedText({ result, language }) {
       <li><span className="legend-swatch annotation-problem" aria-hidden="true" />{t('problemLegend')}</li>
       <li><span className="legend-swatch annotation-neutral" aria-hidden="true" />{t('neutralLegend')}</li>
     </ul>
-    <div className="annotated-source" aria-label={t('annotatedText')} aria-describedby="highlight-hint" dir="auto" tabIndex={0} onCopy={copySource}>
+    <div className="annotated-source" role="region" aria-label={t('annotatedText')} aria-describedby="highlight-hint" dir="auto" tabIndex={0} onCopy={copySource}>
       {segments.map((segment) => segment.tone ? <span className="annotation-group" key={segment.start}>
         <mark className={`annotation annotation-${segment.tone}`}>{segment.text}</mark>
         {segment.links.length > 0 && <sup className="annotation-links">{segment.links.map((finding) => <a key={finding.id} href={`#${finding.id}`}
