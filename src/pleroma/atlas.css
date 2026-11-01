@@ -19,9 +19,9 @@
 .atlas-three-label { position:absolute;top:0;left:0;pointer-events:auto;border:0!important;background:transparent!important;box-shadow:none!important;color:#e6eee5!important;font:500 15px/1.25 'Nunito','Trebuchet MS',sans-serif!important;padding:7px 10px!important;white-space:nowrap;text-shadow:0 1px 4px #03110b,0 0 12px #03110b;cursor:pointer;transform-origin:center;min-height:32px; }
 .atlas-three-label.is-selected { color:#fff4c9!important; }
 .atlas-three-label:focus-visible { outline:2px solid #f0d991;outline-offset:-2px; }
-.atlas-three-label[data-kind='root'] { font-family:Georgia,'Times New Roman',serif!important;font-size:17px!important; }
-.atlas-three-label[data-kind='luminary'] { font-family:Georgia,'Times New Roman',serif!important;font-size:16px!important; }
-.atlas-three-realm-label { pointer-events:none;font-family:Georgia,'Times New Roman',serif!important;font-size:18px!important; }
+.atlas-three-label[data-kind='root'] { font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:17px!important; }
+.atlas-three-label[data-kind='luminary'] { font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:16px!important; }
+.atlas-three-realm-label { pointer-events:none;font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:18px!important; }
 .atlas-label-gloss { display:block;font-size:11px;font-weight:400;margin-top:3px;color:#bad0c2; }
 .atlas-three-fallback { display:grid;place-items:center;min-height:300px;color:#d5ddcf; }
 @keyframes atlas-burst { 0% {opacity:0;transform:scale(.2)} 20% {opacity:.95} 100% {opacity:0;transform:scale(1.55)} }

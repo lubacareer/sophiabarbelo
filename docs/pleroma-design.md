@@ -6,17 +6,25 @@ Approved visual references:
 - Mobile: exec-3e43c6de-86bf-4679-b632-6d1e6dce148c.png
 
 The reference files are in the Codex generated_images folder for this chat.
-They define visual treatment, not authoritative source text or entity topology.
-Source records and deterministic layouts supply the actual interactive diagrams.
+They define the visualization treatment, not authoritative source text or entity
+topology. The subsequent approved UI revision matches the main-branch analyzer:
+mint surfaces and Nunito throughout replace the concepts' dark/gold chrome and
+serif typography. Source records and deterministic layouts supply the diagrams.
 
 ## Visual system
 
-Deep evergreen canvas #081713; raised surfaces #10271e; antique gold #d5be80;
-sage labels #c2d8c6; pale sage reading panel #eaf2e4 with ink #10271e.
-Use local Nunito for controls and Georgia/system serif for headings and quotations.
-The canvas is open space with curved luminous connections, a radiant center,
-finite selection bursts, restrained static stars and a separately generated cloud.
-The reading inspector remains calm and opaque. No card grids or marketing sections.
+UI surfaces use the analyzer's mint #d8f0df and #e4f6e9, borders #b8d9c4,
+ink #061b12, and green accent #246d50. Rounded controls, menus, and reading
+surfaces follow the analyzer's visual language. Use local Nunito throughout,
+including headings, source quotations, and diagram labels, with sans-serif
+fallbacks for glyphs outside the bundled font. The reading inspector is opaque.
+
+The visualization retains its explicit deep evergreen #081713 canvas, existing
+gold illumination, sage labels, curved luminous connections, radiant centers,
+finite selection bursts, static stars, and separately generated cloud. Styling
+the surrounding page must not tint the transparent WebGL canvas. Diagram-label
+changes are limited to font family; their sizes, colors, anchors, and shadows
+remain unchanged. No card grids or marketing sections are added.
 
 Desktop: quiet 56px brand/navigation header, title and one tradition toolbar,
 large canvas and a roughly 360–410px reading inspector. The inspector can close.
@@ -51,7 +59,8 @@ Geometry and controls are code-native; the screenshots are never used as UI.
 
 ## Review requirements
 
-Compare approved concepts with desktop and mobile renders before handoff:
+Compare the main-branch analyzer's UI palette and typography with desktop and
+mobile renders, and compare the visualization with its pre-restyle screenshot:
 layout, typography, palette, curved geometry/light treatment, inspector/source
 readability, control spacing, responsive flow and RTL. Document concrete fixes
 and intentional source-data differences in the PR validation notes.
