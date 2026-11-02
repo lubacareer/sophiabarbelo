@@ -124,3 +124,52 @@ test('external AppError cancellation messages cannot escape as deadline errors',
     await assert.rejects(() => request(async () => assert.fail('Cancelled work must not start'), { deadline }), (error) => error.status === 504 && error.message === 'The analysis took too long. Please try again.');
   } finally { deadline.dispose(); }
 });
+
+test('per-call inference timeouts return safe 504s while search timeouts retain their research error', async (t) => {
+  let controller;
+  t.mock.method(AbortSignal, 'timeout', () => controller.signal);
+  for (const research of [false, true]) for (const phase of ['fetch', 'body']) {
+    controller = new AbortController();
+    const logs = [];
+    let started;
+    let calls = 0;
+    const ready = new Promise((resolve) => { started = resolve; });
+    const work = requestJson('https://api.cloudflare.com/client/v4/accounts/private-account/ai/v1/chat/completions', {
+      headers: {}, body: {}, stage: 'analysis', research, logger: (...items) => logs.push(items),
+      fetchImpl: async () => {
+        calls++;
+        if (phase === 'fetch') { started(); return new Promise(() => {}); }
+        return { ok: true, json: async () => { started(); return new Promise(() => {}); } };
+      },
+    });
+    await ready;
+    const rejected = assert.rejects(work, (error) => error.status === (research ? 503 : 504) && !error.message.includes('private'));
+    controller.abort(new Error('private timeout reason'));
+    await rejected;
+    assert.equal(calls, 1, 'Timeouts must not retry or start another model.');
+    assert.equal(logs[0][0], 'Analysis provider request failed.');
+    assert.equal(logs[0][1].provider, 'api.cloudflare.com');
+    assert.equal(logs[0][1].stage, 'analysis');
+    assert.equal(logs[0][1].phase, phase);
+    assert.equal(logs[0][1].failure, 'timeout');
+    assert.ok(Number.isInteger(logs[0][1].elapsedMs));
+    assert.doesNotMatch(JSON.stringify(logs), /private|reason|accounts/);
+  }
+});
+
+test('transport diagnostics allowlist provider, stage and error codes without logging error details', async () => {
+  const logs = [];
+  for (const code of ['ENOTFOUND', 'private-code']) {
+    await assert.rejects(() => requestJson('https://api.cloudflare.com/client/v4/accounts/private-id/ai/v1/chat/completions?key=private-key', {
+      headers: { authorization: 'Bearer private-key' }, body: { input: 'private text' }, stage: code === 'ENOTFOUND' ? 'query' : 'private-stage', logger: (...items) => logs.push(items),
+      fetchImpl: async () => { throw Object.assign(new Error('private error message'), { cause: { code, stack: 'private stack', detail: 'private account' } }); },
+    }), (error) => error.status === 502);
+  }
+  assert.equal(logs[0][1].code, 'ENOTFOUND');
+  assert.equal(logs[0][1].stage, 'query');
+  assert.equal(logs[0][1].failure, 'transport');
+  assert.equal(logs[1][1].code, undefined);
+  assert.equal(logs[1][1].stage, undefined);
+  assert.doesNotMatch(JSON.stringify(logs), /private|Bearer|stack|account|input|key=/);
+  await assert.rejects(() => requestJson('https://api.cloudflare.com/fixed', { headers: {}, body: {}, logger: () => { throw new Error('private logger'); }, fetchImpl: async () => { throw new Error('private transport'); } }), (error) => error.status === 502 && !error.message.includes('private'));
+});

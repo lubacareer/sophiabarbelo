@@ -2,6 +2,16 @@
 
 Verified on November 2, 2026 for PR #7. Provider credentials remain outside the repository.
 
+## GLM connection and timeout investigation
+
+The user reported a generic GLM connection error after roughly two minutes on the API-credit activation preview. That message came from the Cloudflare inference fetch boundary, where a 120-second per-call timeout and a transport error previously produced the same message. Existing status-only logs did not establish which occurred; the timing is consistent with the earlier call cutoff, not proof of it.
+
+- With the user's explicit authorization, two direct Cloudflare model requests used the saved account/token and a short public Earth-orbit sample. Query generation returned HTTP 200 in 3.6 seconds; final analysis returned HTTP 200 in 51.8 seconds. The adapter used a local research fixture instead of Tavily, so this was a transport diagnostic, not an end-to-end live-research result. It consumed no Tavily searches and did not reproduce the original failure. The account and token worked without adding billing.
+- GLM query/final calls now inherit the remaining shared 240-second research budget instead of stopping at 120 seconds. The 280-second deployed work deadline, output limits, query thinking settings, free-plan confirmations, quotas and no-fallback/no-retry behavior are unchanged. Tests verify that a parent with only 30 seconds left still stops GLM before additional research or model calls.
+- Confirmed inference-call timeouts now return safe localized HTTP 504 responses. Diagnostics record only allowlisted provider/stage, fixed fetch/body phase and failure category, elapsed milliseconds, numeric HTTP status or allowlisted transport code. Tests exclude keys, account IDs, inputs, full URLs, error messages/stacks and response bodies, and verify that failing diagnostics cannot mask the safe error. Tavily timeout semantics remain unchanged.
+- Local full suite: **201 passed, eight Redis tests skipped**, zero failures. Production build and `git diff --check` passed. [PR Checks](https://github.com/lubacareer/sophiabarbelo/pull/7/checks) exercise real Redis in CI. Independent review found no remaining actionable issues.
+- No provider billing, credentials, confirmation flags, hosting limits or deployment protection settings changed during this investigation. The PR remains unmerged; updates use ordinary Git-triggered previews.
+
 ## Gemini API-credit activation after billing setup
 
 The initial free-only Gemini configuration below is historical. The user subsequently linked billing, prepaid funds, applied eligible Ultra/Developer Program credits, and explicitly authorized Gemini API-credit usage on both public and administrator sites. This is billed API access offset by available credits, not an unbilled Free Tier project.
