@@ -6,14 +6,14 @@ const providerHosts = new Set(['generativelanguage.googleapis.com', 'api.cloudfl
 const stages = new Set(['query', 'analysis']);
 const transportCodes = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'UND_ERR_SOCKET', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID']);
 
-function warnRequestFailure(url, { logger, stage, phase, timeoutSignal, requestSignal, startedAt }, error) {
+function warnRequestFailure(url, { logger, stage, phase, timeoutSignal, requestSignal, deadlineExpired, startedAt }, error) {
   try {
     const provider = new URL(url).hostname;
     if (!providerHosts.has(provider) || typeof logger !== 'function') return;
     const code = error?.cause?.code ?? error?.code;
     logger('Analysis provider request failed.', {
       provider, ...(stages.has(stage) ? { stage } : {}), phase,
-      failure: timeoutSignal.aborted ? 'timeout' : requestSignal.aborted ? 'cancelled' : 'transport',
+      failure: timeoutSignal.aborted || deadlineExpired ? 'timeout' : requestSignal.aborted ? 'cancelled' : 'transport',
       elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)),
       ...(transportCodes.has(code) ? { code } : {}),
     });
@@ -35,9 +35,9 @@ function retryAfter(response) {
   return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
-function preserveDeadlineError(deadline) {
+function getDeadlineError(deadline) {
   try { deadline?.check(); }
-  catch (error) { if (error instanceof AppError && error.status === 504) throw deadlineExceeded(); }
+  catch (error) { if (error instanceof AppError && error.status === 504) return deadlineExceeded(); }
 }
 
 // Every request, including reading its JSON body, shares the analysis deadline.
@@ -52,8 +52,12 @@ export async function requestJson(url, { headers, body, fetchImpl, signal, deadl
     response = await awaitWithSignal(fetchImpl(url, { method: 'POST', redirect: 'error', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: requestSignal }), requestSignal);
     checkDeadline(deadline, requestSignal);
   } catch (error) {
-    warnRequestFailure(url, { logger, stage, phase: 'fetch', timeoutSignal, requestSignal, startedAt }, error);
-    preserveDeadlineError(deadline);
+    const deadlineError = getDeadlineError(deadline);
+    // A caller can abort with AppError(504) before expiry; use the monotonic
+    // budget as well as the safe error classification, never its private reason.
+    const deadlineExpired = Boolean(deadlineError && deadline?.remainingMs?.() === 0);
+    warnRequestFailure(url, { logger, stage, phase: 'fetch', timeoutSignal, requestSignal, deadlineExpired, startedAt }, error);
+    if (deadlineError) throw deadlineError;
     if (timeoutSignal.aborted && !research) throw deadlineExceeded();
     throw research ? researchUnavailable() : new AppError(502, 'The analysis service could not be reached. Please try again.');
   }
@@ -82,8 +86,10 @@ export async function requestJson(url, { headers, body, fetchImpl, signal, deadl
     checkDeadline(deadline, requestSignal);
     return payload;
   } catch (error) {
-    warnRequestFailure(url, { logger, stage, phase: 'body', timeoutSignal, requestSignal, startedAt }, error);
-    preserveDeadlineError(deadline);
+    const deadlineError = getDeadlineError(deadline);
+    const deadlineExpired = Boolean(deadlineError && deadline?.remainingMs?.() === 0);
+    warnRequestFailure(url, { logger, stage, phase: 'body', timeoutSignal, requestSignal, deadlineExpired, startedAt }, error);
+    if (deadlineError) throw deadlineError;
     if (timeoutSignal.aborted && !research) throw deadlineExceeded();
     throw research ? researchUnavailable() : incompleteResult();
   }

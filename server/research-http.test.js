@@ -128,14 +128,14 @@ test('external AppError cancellation messages cannot escape as deadline errors',
 test('per-call inference timeouts return safe 504s while search timeouts retain their research error', async (t) => {
   let controller;
   t.mock.method(AbortSignal, 'timeout', () => controller.signal);
-  for (const research of [false, true]) for (const phase of ['fetch', 'body']) {
+  for (const research of [false, true]) for (const phase of ['fetch', 'body']) for (const stage of ['query', 'analysis']) {
     controller = new AbortController();
     const logs = [];
     let started;
     let calls = 0;
     const ready = new Promise((resolve) => { started = resolve; });
     const work = requestJson('https://api.cloudflare.com/client/v4/accounts/private-account/ai/v1/chat/completions', {
-      headers: {}, body: {}, stage: 'analysis', research, logger: (...items) => logs.push(items),
+      headers: {}, body: {}, stage, research, logger: (...items) => logs.push(items),
       fetchImpl: async () => {
         calls++;
         if (phase === 'fetch') { started(); return new Promise(() => {}); }
@@ -149,11 +149,90 @@ test('per-call inference timeouts return safe 504s while search timeouts retain 
     assert.equal(calls, 1, 'Timeouts must not retry or start another model.');
     assert.equal(logs[0][0], 'Analysis provider request failed.');
     assert.equal(logs[0][1].provider, 'api.cloudflare.com');
-    assert.equal(logs[0][1].stage, 'analysis');
+    assert.equal(logs[0][1].stage, stage);
     assert.equal(logs[0][1].phase, phase);
     assert.equal(logs[0][1].failure, 'timeout');
     assert.ok(Number.isInteger(logs[0][1].elapsedMs));
     assert.doesNotMatch(JSON.stringify(logs), /private|reason|accounts/);
+  }
+});
+
+test('shared and research expiry log timeout for both inference stages and I/O phases', async () => {
+  for (const budget of ['request', 'research']) for (const stage of ['query', 'analysis']) for (const phase of ['fetch', 'body']) {
+    let clock = 0, expireParent, expireResearch;
+    const parent = createDeadline(280_000, { now: () => clock, setTimer: (callback) => { expireParent = callback; return 1; }, clearTimer: () => {} });
+    if (budget === 'request') clock = 250_000;
+    const deadline = createDeadline(240_000, { parent, now: () => clock, setTimer: (callback) => { expireResearch = callback; return 1; }, clearTimer: () => {} });
+    let started;
+    const ready = new Promise((resolve) => { started = resolve; });
+    const logs = [];
+    const work = requestJson('https://api.cloudflare.com/client/v4/accounts/private-account/ai/v1/chat/completions', {
+      headers: { authorization: 'Bearer private-key' }, body: { input: 'private passage' }, deadline, stage,
+      logger: (...items) => logs.push(items),
+      fetchImpl: async () => {
+        if (phase === 'fetch') { started(); return new Promise(() => {}); }
+        return { ok: true, json: async () => { started(); return new Promise(() => {}); } };
+      },
+    });
+    try {
+      await ready;
+      const rejected = assert.rejects(work, (error) => error.status === 504 && error.message === 'The analysis took too long. Please try again.');
+      clock = budget === 'request' ? 280_000 : 240_000;
+      (budget === 'request' ? expireParent : expireResearch)();
+      await rejected;
+      assert.equal(logs.length, 1);
+      assert.equal(logs[0][1].failure, 'timeout');
+      assert.equal(logs[0][1].stage, stage);
+      assert.equal(logs[0][1].phase, phase);
+      assert.doesNotMatch(JSON.stringify(logs), /private|reason|accounts|passage|Bearer/);
+    } finally { deadline.dispose(); parent.dispose(); }
+  }
+});
+
+test('absolute deadline expiry wins over a late transport error and is diagnosed as timeout', async () => {
+  for (const phase of ['fetch', 'body']) {
+    let clock = 0;
+    const deadline = createDeadline(280_000, { now: () => clock, setTimer: () => 1, clearTimer: () => {} });
+    const logs = [];
+    const lateFailure = () => { clock = 280_000; throw Object.assign(new Error('private transport failure'), { code: 'ECONNRESET' }); };
+    try {
+      await assert.rejects(() => requestJson('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        headers: {}, body: {}, deadline, stage: 'analysis', logger: (...items) => logs.push(items),
+        fetchImpl: async () => phase === 'fetch' ? lateFailure() : { ok: true, json: async () => lateFailure() },
+      }), (error) => error.status === 504);
+      assert.equal(logs[0][1].failure, 'timeout');
+      assert.equal(logs[0][1].phase, phase);
+      assert.equal(logs[0][1].code, 'ECONNRESET');
+      assert.doesNotMatch(JSON.stringify(logs), /private/);
+    } finally { deadline.dispose(); }
+  }
+});
+
+test('external cancellation stays cancelled even when its private reason resembles a timeout', async () => {
+  for (const stage of ['query', 'analysis']) for (const phase of ['fetch', 'body']) for (const status of [undefined, 504]) {
+    const controller = new AbortController();
+    const parent = createDeadline(280_000, { signal: controller.signal, now: () => 0, setTimer: () => 1, clearTimer: () => {} });
+    const deadline = createDeadline(240_000, { parent, now: () => 0, setTimer: () => 1, clearTimer: () => {} });
+    let started;
+    const ready = new Promise((resolve) => { started = resolve; });
+    const logs = [];
+    const work = requestJson('https://api.cloudflare.com/fixed', {
+      headers: {}, body: {}, deadline, stage, logger: (...items) => logs.push(items),
+      fetchImpl: async () => {
+        if (phase === 'fetch') { started(); return new Promise(() => {}); }
+        return { ok: true, json: async () => { started(); return new Promise(() => {}); } };
+      },
+    });
+    try {
+      await ready;
+      const rejected = assert.rejects(work, (error) => error.status === (status || 502) && !error.message.includes('private'));
+      controller.abort(status ? new AppError(status, 'private external timeout-like reason') : new Error('private external abort'));
+      await rejected;
+      assert.equal(logs[0][1].failure, 'cancelled');
+      assert.equal(logs[0][1].stage, stage);
+      assert.equal(logs[0][1].phase, phase);
+      assert.doesNotMatch(JSON.stringify(logs), /private|reason|stack/);
+    } finally { deadline.dispose(); parent.dispose(); }
   }
 });
 

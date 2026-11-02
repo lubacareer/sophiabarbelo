@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createSharedLimiter } from './shared-limiter.js';
 import { createApp } from './app.js';
 import { modelEnvironment } from '../test-support/models.js';
+import { AppError } from './errors.js';
 
 // Opt in only to an explicitly selected Redis on loopback. Never use the app's
 // Redis URL/token, a remote service, or a real analysis provider in these tests.
@@ -276,8 +277,19 @@ async function withServers(apps, run) {
   }
 }
 
-function post(base, ip, extra = {}, body = { type: 'text', content: 'A local test passage.' }) {
-  return fetch(`${base}/api/analyze`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': ip, ...extra }, body: JSON.stringify(body) });
+function post(base, ip, extra = {}, body = { type: 'text', content: 'A local test passage.' }, signal) {
+  return fetch(`${base}/api/analyze`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': ip, ...extra }, body: JSON.stringify(body), ...(signal ? { signal } : {}) });
+}
+
+async function waitForAnalysisStart(ready, request, timeoutMs = 5000) {
+  let timer;
+  try {
+    await Promise.race([
+      ready,
+      request.then((response) => { throw new Error(`Analysis did not start before HTTP ${response.status}.`); }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Analysis did not start before the readiness timeout.')), timeoutMs); }),
+    ]);
+  } finally { clearTimeout(timer); }
 }
 
 const emptyResult = { claims: [], rhetoric: [], limitations: [] };
@@ -330,9 +342,10 @@ test('a timed-out public request keeps real leases through cancellation cleanup 
       },
     });
     await withServers([app], async ([base]) => {
-      const request = post(base, '192.0.2.60');
+      const controller = new AbortController();
+      const request = post(base, '192.0.2.60', {}, undefined, controller.signal);
       try {
-        await ready;
+        await waitForAnalysisStart(ready, request);
         const admitted = acquireCommand();
         expire();
         await abortSeen;
@@ -343,9 +356,34 @@ test('a timed-out public request keeps real leases through cancellation cleanup 
         assert.deepEqual(await counters(admitted.keys), ['1', '1']);
         assert.equal(await redis(['ZCARD', admitted.keys[0]]), 0);
         assert.equal(await redis(['ZCARD', admitted.keys[1]]), 0);
-      } finally { finishCleanup(); await request; }
+      } finally {
+        // Settle provider cleanup even when admission fails or readiness times out.
+        expire?.(); finishCleanup(); controller.abort();
+        await Promise.allSettled([request]);
+      }
     });
   });
+});
+
+test('the lease timeout harness reports admission failures instead of waiting forever for analysis', { timeout: 5000 }, async () => {
+  let analyses = 0;
+  const app = createApp({ deployment: 'public', modelEnvironment,
+    sharedLimiter: { acquire: async () => { throw new AppError(503, 'Analysis is temporarily unavailable. Please try again later.'); } },
+    analyze: async () => { analyses++; return emptyResult; },
+  });
+  await withServers([app], async ([base]) => {
+    const controller = new AbortController();
+    const request = post(base, '192.0.2.61', {}, undefined, controller.signal);
+    try {
+      await assert.rejects(() => waitForAnalysisStart(new Promise(() => {}), request), /Analysis did not start before HTTP 503/);
+      assert.equal(analyses, 0);
+    } finally { controller.abort(); await Promise.allSettled([request]); }
+  });
+});
+
+test('analysis readiness is bounded when neither the handler nor the HTTP request settles', async () => {
+  await assert.rejects(() => waitForAnalysisStart(new Promise(() => {}), new Promise(() => {}), 10), /readiness timeout/);
+  await assert.rejects(() => waitForAnalysisStart(new Promise(() => {}), Promise.reject(new Error('Local request failed'))), /Local request failed/);
 });
 
 test('public HTTP work holds real leases, releases them after success or failure, and charges admitted failures', integration, async () => {
