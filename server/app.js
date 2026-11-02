@@ -79,7 +79,7 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
       try { await releaseCurrent(); } catch { /* expiry handles cleanup */ }
     }
     try {
-      const { type, content, reasoningEffort, language, modelId } = req.body || {};
+      const { type, content, reasoningEffort, language, modelId, includeSymbolicReadings } = req.body || {};
       if (language !== undefined && !languages.includes(language)) {
         throw new AppError(400, 'Choose a valid interface language.');
       }
@@ -94,7 +94,7 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
       // Reject URLs that are invalid without network access before allocating quota.
       if (type === 'url') parsePublicUrl(value);
       // Selection is server-authorized before quota admission or extraction.
-      const selected = resolveAnalysisModel({ modelId, reasoningEffort }, context);
+      const selected = resolveAnalysisModel({ modelId, reasoningEffort, includeSymbolicReadings }, context);
       deadline?.check();
 
       if (deployment === 'public') {
@@ -143,7 +143,7 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
       deadline?.check();
       const text = type === 'url' ? await extract(value, cancellation) : value;
       deadline?.check();
-      const result = await runAnalysis(text, { reasoningEffort, ...(language !== undefined ? { language } : {}), ...(selected ? { modelId: selected.id } : {}), ...cancellation });
+      const result = await runAnalysis(text, { reasoningEffort, ...(language !== undefined ? { language } : {}), ...(selected ? { modelId: selected.id } : {}), ...(includeSymbolicReadings !== undefined ? { includeSymbolicReadings } : {}), ...cancellation });
       deadline?.check();
       await release();
       res.set('Cache-Control', 'no-store').json({ ...result, ...(selected ? { analysisModelId: selected.id } : {}), sourceText: text });

@@ -14,7 +14,7 @@ export function parseModelConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid analysis configuration');
   if (!Object.hasOwn(value, 'models')) {
     if (Object.hasOwn(value, 'defaultModelId') || typeof value.reasoningControls !== 'boolean') throw new Error('Invalid analysis configuration');
-    return { kind: 'legacy', reasoningControls: value.reasoningControls };
+    return { kind: 'legacy', reasoningControls: value.reasoningControls, ...(value.symbolicReadings === true ? { symbolicReadings: true } : {}) };
   }
   const ids = Object.keys(modelLabels);
   if (!Array.isArray(value.models) || value.models.length !== ids.length) throw new Error('Invalid model configuration');
@@ -26,7 +26,7 @@ export function parseModelConfig(value) {
     return { id: model.id, label: model.label, available: model.available, unavailableReason: model.unavailableReason, reasoningControls: model.reasoningControls, access: model.access };
   });
   if (new Set(models.map(({ id }) => id)).size !== ids.length || !models.some(({ id }) => id === value.defaultModelId)) throw new Error('Invalid model configuration');
-  return { kind: 'models', models, defaultModelId: value.defaultModelId };
+  return { kind: 'models', models, defaultModelId: value.defaultModelId, ...(value.symbolicReadings === true ? { symbolicReadings: true } : {}) };
 }
 
 export function savedModel(storage) {

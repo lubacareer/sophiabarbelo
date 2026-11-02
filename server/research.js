@@ -4,6 +4,7 @@ import { outputLanguageInstruction } from './localization.js';
 import { passageAnalysisInstruction } from './analysis-instruction.js';
 import { searchWithTavily } from './tavily.js';
 import { incompleteResult, researchUnavailable } from './research-http.js';
+import { symbolicSchema, symbolicAnalysisInstruction, symbolicResearchInstruction } from './symbolic.js';
 import { checkDeadline, createDeadline, deadlineExceeded } from './deadline.js';
 
 export const RESEARCH_LIMITS = Object.freeze({ queries: 3, queryChars: 400, queryTokens: 2048, analysisTokens: 8192, researchChars: 30_000, timeoutMs: 240_000 });
@@ -49,12 +50,12 @@ function boundedResearch(queries, candidates) {
   return { sources, serialized: serialize(sources) };
 }
 
-export async function analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline }) {
+export async function analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline, includeSymbolicReadings = false }) {
   if (!tavilyApiKey) throw new AppError(503, 'Free web research is not configured. Please try again later.');
   const researchDeadline = createDeadline(RESEARCH_LIMITS.timeoutMs, { parent: deadline, signal });
   try {
     checkDeadline(researchDeadline);
-    const plan = await complete({ system: queryInstruction + passageAnalysisInstruction, input: text, schema: querySchema, maxTokens: RESEARCH_LIMITS.queryTokens, signal: researchDeadline.signal, deadline: researchDeadline });
+    const plan = await complete({ system: queryInstruction + passageAnalysisInstruction + symbolicResearchInstruction(includeSymbolicReadings), input: text, schema: querySchema, maxTokens: RESEARCH_LIMITS.queryTokens, signal: researchDeadline.signal, deadline: researchDeadline });
     checkDeadline(researchDeadline);
     const queries = queriesFrom(plan);
     checkDeadline(researchDeadline);
@@ -69,14 +70,15 @@ export async function analyzeWithResearch(text, { complete, language, tavilyApiK
     const input = JSON.stringify({ originalText: text, research: research.serialized, providerReportedUrls: research.sources.map(({ url }) => url) });
     checkDeadline(researchDeadline);
     const result = await complete({
-      system: analysisInstruction + passageAnalysisInstruction + rhetoricInstruction + outputLanguageInstruction(language),
-      input, schema, maxTokens: RESEARCH_LIMITS.analysisTokens, signal: researchDeadline.signal, deadline: researchDeadline,
+      system: analysisInstruction + passageAnalysisInstruction + rhetoricInstruction + outputLanguageInstruction(language) + symbolicAnalysisInstruction(includeSymbolicReadings),
+      input, schema: symbolicSchema(schema, includeSymbolicReadings), maxTokens: RESEARCH_LIMITS.analysisTokens, signal: researchDeadline.signal, deadline: researchDeadline,
     });
     checkDeadline(researchDeadline);
-    const validated = validatedResult(result, { citations: research.sources }, text, language);
+    const validated = validatedResult(result, { citations: research.sources }, text, language, { includeSymbolicReadings });
     checkDeadline(researchDeadline);
     const sourceTitles = new Map(research.sources.map(({ url, title }) => [url, title]));
     for (const claim of validated.claims) for (const source of claim.sources) source.title = sourceTitles.get(source.url);
+    for (const reading of validated.symbolicReadings || []) for (const source of reading.sources) source.title = sourceTitles.get(source.url);
     checkDeadline(researchDeadline);
     return validated;
   } catch (error) {

@@ -24,6 +24,15 @@
 .atlas-three-realm-label { pointer-events:none;font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:18px!important; }
 .atlas-label-gloss { display:block;font-size:11px;font-weight:400;margin-top:3px;color:#bad0c2; }
 .atlas-three-fallback { display:grid;place-items:center;min-height:300px;color:#d5ddcf; }
+.atlas-svg-path,.atlas-path-badges { cursor:pointer;outline:none; }
+.atlas-svg-path:focus-visible .atlas-path-hit { stroke:#e4f6e9;stroke-opacity:.3;stroke-width:10; }
+.atlas-svg-path:hover .atlas-path-hit { stroke:#e4f6e9;stroke-opacity:.15; }
+.atlas-correspondence-glyph { fill:#e5f5df;font:700 17px 'Nunito','Segoe UI Symbol',sans-serif;pointer-events:none; }
+.atlas-extra-label { font-size:20px; }
+.atlas-three-label { z-index:2; }
+.atlas-three-label.atlas-three-symbol { z-index:1;border-radius:50%!important;background:#10291fcc!important;border:1px solid #a5c9bb!important;width:28px;height:28px;min-width:28px;min-height:28px!important;padding:0!important;font-size:16px!important;display:grid;place-items:center; }
+.atlas-three-symbol[data-kind='personal'] { border-color:#ceb3f1!important; }
+.atlas-three-symbol.is-selected { border-color:#fff3c4!important;box-shadow:0 0 12px #c6e5cd55!important; }
 @keyframes atlas-burst { 0% {opacity:0;transform:scale(.2)} 20% {opacity:.95} 100% {opacity:0;transform:scale(1.55)} }
 @keyframes atlas-ray { 0% {opacity:0;stroke-dashoffset:160} 20% {opacity:.8} 100% {opacity:0;stroke-dashoffset:0} }
 @keyframes atlas-spark-fade { 0%,90% {opacity:1} 100% {opacity:0} }

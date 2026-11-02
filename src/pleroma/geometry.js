@@ -1,4 +1,6 @@
-import { planetaryNodes } from './catalog.js';
+import { planetaryNodes, getNode } from './catalog.js';
+import { correspondencePaths, celestialAssociations, correspondenceSymbols } from './correspondences.js';
+import { getPersonalSceneRecords } from './personal.js';
 
 // Renderer-independent atlas coordinates. Geometry illustrates relationships;
 // it is not evidence that a source specifies literal spatial distances.
@@ -105,7 +107,7 @@ export function pointOnCurve(points, t) {
   return [0, 1].map((axis) => q ** 3 * points[0][axis] + 3 * q ** 2 * t * points[1][axis] + 3 * q * t ** 2 * points[2][axis] + t ** 3 * points[3][axis]);
 }
 
-export function getScene(tradition, overlays = {}) {
+export function getScene(tradition, overlays = {}, personalConnections = []) {
   if (!tradition || !Array.isArray(tradition.nodes)) return { markers: [], labels: [], edges: [], rings: [], dust: [], cloud: null };
   const nodes = [...tradition.nodes, ...(tradition.id === 'john' && overlays.planets ? planetaryNodes : [])];
   const canonical = nodes.map((node, index) => ({ id: node.id, canonicalParentId: node.id, node, kind: node.kind, ...positionOf(node, tradition, index), major: labelPriority(node) }));
@@ -115,12 +117,43 @@ export function getScene(tradition, overlays = {}) {
       position: [marker.position[0] + (i ? 11 : -11), marker.position[1]],
       world: [marker.world[0] + (i ? 0.11 : -0.11), marker.world[1], marker.world[2]] }))
     : [marker]);
-  const edges = (tradition.edges || []).flatMap((edge, index) => {
+  const correspondenceMode = tradition.id === 'tree' && (overlays.tarot || overlays.astrology);
+  const edgeRecords = correspondenceMode ? correspondencePaths.map((path) => ({ ...path, kind: 'interpretive', correspondence: path })) : tradition.edges || [];
+  const edges = edgeRecords.flatMap((edge, index) => {
     const from = byId.get(edge.from), to = byId.get(edge.to);
     if (!from || !to) return [];
     const bend = (index % 2 ? -1 : 1) * (tradition.id === 'tree' ? 0.17 : 0.22);
-    return [{ ...edge, id: `${edge.from}-${edge.to}`, from, to, bend, points: curvePoints(from.position, to.position, bend) }];
+    return [{ ...edge, id: edge.id || `${edge.from}-${edge.to}`, from, to, bend, points: curvePoints(from.position, to.position, bend) }];
   });
+  const associations = tradition.id === 'tree' && overlays.astrology ? celestialAssociations.map((record) => {
+    const parent = byId.get(record.parentId);
+    const side = parent.position[0] < 550 ? -1 : 1;
+    return { id: record.id, kind: 'association', node: record, glyph: record.glyph, parent,
+      position: [parent.position[0] + side * 86, parent.position[1]],
+      world: [parent.world[0] + side * 1.04, parent.world[1], parent.world[2]], major: false };
+  }) : [];
+  for (const marker of associations) edges.push({ id: marker.id, kind: 'interpretive', association: marker.node,
+    from: marker.parent, to: marker, bend: .22, points: curvePoints(marker.parent.position, marker.position, .22) });
+  const personalMarkers = [];
+  for (const [index, record] of getPersonalSceneRecords(tradition.id, personalConnections).entries()) {
+    const from = byId.get(record.localNodeId);
+    if (!from) continue;
+    let to = byId.get(record.otherNodeId);
+    if (!to) {
+      const endpoint = record.otherEndpoint;
+      const item = endpoint.kind === 'symbol' ? correspondenceSymbols.find(({ id }) => id === endpoint.symbolId)
+        : endpoint.kind === 'entity' ? getNode(endpoint.traditionId, endpoint.nodeId) : null;
+      const label = record.otherLabel || item?.label || endpoint.label || record.label;
+      const angle = (index % 7) * .72 - 2.2;
+      const dx = Math.cos(angle) * (80 + index % 3 * 22), dy = Math.sin(angle) * (70 + index % 3 * 18);
+      to = { id: `personal-marker-${record.id}`, kind: 'personal', node: { label }, glyph: item?.glyph || '✧',
+        personalId: record.id, position: [Math.max(45, Math.min(WIDTH - 45, from.position[0] + dx)), Math.max(35, Math.min(HEIGHT - 35, from.position[1] + dy))],
+        world: [from.world[0] + dx / 90, from.world[1] - dy / 94, from.world[2] + (tradition.id === 'tree' ? 0 : .3)] };
+      personalMarkers.push(to);
+    }
+    edges.push({ id: `personal-edge-${record.id}`, kind: 'personal', personal: record, from, to, bend: index % 2 ? -.28 : .28,
+      points: curvePoints(from.position, to.position, index % 2 ? -.28 : .28) });
+  }
   const rings = [];
   if (tradition.id === 'john') {
     rings.push({ id: 'pleroma-boundary', position: [550, 385], rx: 347, ry: 301, world: [0, 0, 0], radius: 5.05, opacity: 0.32 });
@@ -141,7 +174,7 @@ export function getScene(tradition, overlays = {}) {
     return { id: i, position: [550 + Math.cos(angle) * radius * 1.1, 390 + Math.sin(angle) * radius * 0.78],
       world: [Math.cos(angle) * radius / 74, ((i * 29) % 70) / 35 - 0.3, Math.sin(angle) * radius / 85], size: 0.6 + (i % 5) * 0.25 };
   });
-  return { markers, canonical, labels, edges, rings, dust, cloud: canonical.find((m) => m.kind === 'cloud') || null };
+  return { markers, canonical, labels, edges, associations, personalMarkers, rings, dust, cloud: canonical.find((m) => m.kind === 'cloud') || null };
 }
 
 export function focusFor(scene, layer = 'all') {

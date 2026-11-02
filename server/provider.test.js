@@ -196,7 +196,7 @@ test('local/Caddy configuration and environment-selected provider behavior remai
     const adapters = Object.fromEntries(['grok', 'groq', 'openai'].map((key) => [key, async (_text, options) => { calls.push({ key, options }); return result(); }]));
     assert.deepEqual(await analyzeConfigured('Claim', { language: 'ru' }, { ...context('local', environment), ...adapters }), result());
     assert.deepEqual(calls, [{ key: name, options: { language: 'ru' } }]);
-    assert.deepEqual(analysisConfiguration(context('local', environment)), { reasoningControls: provider === 'xai' });
+    assert.deepEqual(analysisConfiguration(context('local', environment)), { reasoningControls: provider === 'xai', symbolicReadings: true });
     await assert.rejects(() => analyzeConfigured('Claim', { modelId: 'luna' }, { ...context('local', environment), ...adapters }), (error) => error.status === 400);
   }
   for (const model of ['grok-4.3', 'grok-4.20-multi-agent', 'grok-4.7-other', 'other-model']) {

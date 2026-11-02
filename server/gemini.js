@@ -5,7 +5,7 @@ import { checkDeadline } from './deadline.js';
 
 const model = 'gemini-3.8-flash';
 
-export async function analyzeWithGemini(text, { apiKey = process.env.GEMINI_API_KEY, tavilyApiKey = process.env.TAVILY_API_KEY, language, fetchImpl = fetch, signal, deadline } = {}) {
+export async function analyzeWithGemini(text, { apiKey = process.env.GEMINI_API_KEY, tavilyApiKey = process.env.TAVILY_API_KEY, language, fetchImpl = fetch, signal, deadline, includeSymbolicReadings = false } = {}) {
   if (!apiKey) throw new AppError(503, 'Analysis is temporarily unavailable. Please try again later.');
   async function complete({ system, input, schema, maxTokens, signal: requestSignal, deadline: stageDeadline }) {
     checkDeadline(stageDeadline, requestSignal);
@@ -21,5 +21,5 @@ export async function analyzeWithGemini(text, { apiKey = process.env.GEMINI_API_
     checkDeadline(stageDeadline, requestSignal);
     return parsed;
   }
-  return analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline });
+  return analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline, includeSymbolicReadings });
 }

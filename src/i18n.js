@@ -4,6 +4,8 @@ export const localeStorageKey = 'sophia-language';
 
 export const messages = {
   en: {
+    exploreSymbolic: 'Explore symbolic meanings', symbolicHint: 'Invite archetypal, Tarot, astrological, and other symbolic readings alongside your analysis. Your own interpretation is welcome.',
+    symbolicReadings: 'Possible symbolic readings', symbolicIntro: 'Ideas to explore through the passage, its traditions, and your own intuition.', symbolicTradition: 'Tradition-based reading', symbolicReflection: 'A possible reflection', noSymbolicReadings: 'No symbolic reading was suggested for this passage. You can still follow the associations it brings to mind.',
     language: 'Interface language', tagline: 'Analyze claims. Explore rhetoric. Think more clearly.', aside: 'Different perspectives. A clearer picture.',
     inputType: 'Input type', analyzeText: 'Analyze text', analyzeUrl: 'Analyze a URL', textLabel: 'Text to analyze', urlLabel: 'URL to analyze',
     placeholder: 'Paste a news article, speech, or other text here…', textHint: 'Try a news article, opinion piece, or your own text.', urlHint: 'Enter a link to a publicly accessible article.',
@@ -16,7 +18,7 @@ export const messages = {
     analysis: 'Analysis', analysisIntro: 'Key factual claims and rhetorical techniques, with evidence and context.', claims: 'Factual claims', claimsIntro: 'Checkable statements from the text, with evidence and uncertainty.',
     rhetoric: 'Rhetorical analysis', rhetoricIntro: 'Possible rhetorical techniques, with excerpts and explanation.', noClaims: 'No checkable claims were identified.', claimsEmpty: 'Claims and supporting sources will appear here after analysis.',
     noRhetoric: 'No rhetorical techniques were identified.', rhetoricEmpty: 'Possible rhetorical techniques and their context will appear here.', sources: 'Sources', limitations: 'Limitations',
-    interpretation: 'Rhetorical observations are interpretations. Evidence can be incomplete, so review the sources and context yourself.',
+    interpretation: 'Bring your own perspective. These observations invite reflection; explore the sources, context, and other possible readings.',
     supported: 'Supported', contradicted: 'Contradicted', mixed: 'Mixed evidence', unverified: 'Unverified', reasoningFailure: 'Reasoning failure', rhetoricalObservation: 'Rhetorical observation',
     scapegoating: 'Scapegoating (Azazel)', selective_piety: 'Selective in-group piety (Stork Wings)', shame_fear: 'Shame / fear framing', demagogy: 'Demagogy', victim_blaming: 'Victim-blaming / gaslighting', intimidation: 'Intimidation', faulty_reasoning: 'Faulty reasoning', other: 'Other technique',
     demos: 'Try a demo', demosHint: 'Load a passage, then press Analyze. Findings are not predetermined.', ancient: 'Ancient theology', media: 'Modern media / viral news',
@@ -28,6 +30,8 @@ export const messages = {
     resultLanguageHint: 'Run Analyze again to write a new analysis in the selected interface language.',
   },
   he: {
+    exploreSymbolic: 'לגלות משמעויות סמליות', symbolicHint: 'הזמינו קריאות ארכיטיפיות, טארוט, אסטרולוגיה ומשמעויות סמליות נוספות לצד הניתוח. גם הפרשנות שלכם מוזמנת.',
+    symbolicReadings: 'קריאות סמליות אפשריות', symbolicIntro: 'רעיונות להתבוננות דרך הקטע, המסורות והאינטואיציה שלכם.', symbolicTradition: 'קריאה בהשראת מסורת', symbolicReflection: 'מחשבה אפשרית', noSymbolicReadings: 'לא הוצעה קריאה סמלית לקטע הזה. עדיין אפשר לחקור את האסוציאציות שהוא מעורר בכם.',
     language: 'שפת הממשק', tagline: 'בודקים טענות. בוחנים רטוריקה. חושבים בבהירות.', aside: 'נקודות מבט שונות. תמונה ברורה יותר.',
     inputType: 'סוג הקלט', analyzeText: 'ניתוח טקסט', analyzeUrl: 'ניתוח קישור', textLabel: 'טקסט לניתוח', urlLabel: 'קישור לניתוח',
     placeholder: 'הדביקו כאן כתבה, נאום או טקסט אחר…', textHint: 'אפשר לנסות כתבה, מאמר דעה או טקסט שלכם.', urlHint: 'הזינו קישור למאמר הנגיש לציבור.',
@@ -40,7 +44,7 @@ export const messages = {
     analysis: 'ניתוח', analysisIntro: 'טענות עובדתיות ואמצעים רטוריים מרכזיים, עם ראיות והקשר.', claims: 'טענות עובדתיות', claimsIntro: 'אמירות שניתן לבדוק, בצירוף ראיות ואי־ודאות.',
     rhetoric: 'ניתוח רטורי', rhetoricIntro: 'אמצעים רטוריים אפשריים, עם מובאות והסבר.', noClaims: 'לא זוהו טענות שניתן לבדוק.', claimsEmpty: 'טענות ומקורות תומכים יופיעו כאן לאחר הניתוח.',
     noRhetoric: 'לא זוהו אמצעים רטוריים.', rhetoricEmpty: 'אמצעים רטוריים אפשריים וההקשר שלהם יופיעו כאן.', sources: 'מקורות', limitations: 'מגבלות',
-    interpretation: 'הערות רטוריות הן פרשנויות. הראיות עשויות להיות חלקיות; בדקו בעצמכם את המקורות ואת ההקשר.',
+    interpretation: 'הביאו את נקודת המבט שלכם. ההערות מזמינות התבוננות; גלו את המקורות, ההקשר וקריאות אפשריות נוספות.',
     supported: 'נתמך במקורות', contradicted: 'נסתר במקורות', mixed: 'ראיות מעורבות', unverified: 'לא מאומת', reasoningFailure: 'כשל בהסקה', rhetoricalObservation: 'הערה רטורית',
     scapegoating: 'שעיר לעזאזל (עזאזל)', selective_piety: 'אדיקות סלקטיבית כלפי קבוצת הפנים (כנפי החסידה)', shame_fear: 'מסגור באמצעות בושה או פחד', demagogy: 'דמגוגיה', victim_blaming: 'האשמת הקורבן / ערעור תפיסת המציאות', intimidation: 'הפחדה', faulty_reasoning: 'הסקה לקויה', other: 'אמצעי אחר',
     demos: 'נסו דוגמה', demosHint: 'טענו קטע ולחצו על ניתוח. הממצאים אינם נקבעים מראש.', ancient: 'תאולוגיה עתיקה', media: 'תקשורת מודרנית / חדשות ויראליות',
@@ -52,6 +56,8 @@ export const messages = {
     resultLanguageHint: 'לחצו שוב על ניתוח כדי לקבל ניתוח חדש בשפת הממשק שנבחרה.',
   },
   ru: {
+    exploreSymbolic: 'Исследовать символические смыслы', symbolicHint: 'Добавьте к анализу архетипические, астрологические, связанные с Таро и другие символические прочтения. Ваша интерпретация тоже приветствуется.',
+    symbolicReadings: 'Возможные символические прочтения', symbolicIntro: 'Идеи для размышления через текст, его традиции и вашу интуицию.', symbolicTradition: 'Прочтение в рамках традиции', symbolicReflection: 'Возможное размышление', noSymbolicReadings: 'Для этого отрывка символическое прочтение не предложено. Можно исследовать ассоциации, которые он вызывает у вас.',
     language: 'Язык интерфейса', tagline: 'Проверяйте утверждения. Изучайте риторику. Мыслите яснее.', aside: 'Разные точки зрения. Более ясная картина.',
     inputType: 'Тип ввода', analyzeText: 'Анализ текста', analyzeUrl: 'Анализ ссылки', textLabel: 'Текст для анализа', urlLabel: 'Ссылка для анализа',
     placeholder: 'Вставьте статью, речь или другой текст…', textHint: 'Попробуйте новость, авторскую колонку или свой текст.', urlHint: 'Введите ссылку на общедоступную статью.',
@@ -64,7 +70,7 @@ export const messages = {
     analysis: 'Анализ', analysisIntro: 'Основные фактические утверждения и риторические приёмы с доказательствами и контекстом.', claims: 'Фактические утверждения', claimsIntro: 'Проверяемые высказывания с доказательствами и указанием неопределённости.',
     rhetoric: 'Риторический анализ', rhetoricIntro: 'Возможные риторические приёмы с цитатами и объяснениями.', noClaims: 'Проверяемые утверждения не найдены.', claimsEmpty: 'После анализа здесь появятся утверждения и источники.',
     noRhetoric: 'Риторические приёмы не найдены.', rhetoricEmpty: 'Здесь появятся возможные риторические приёмы и их контекст.', sources: 'Источники', limitations: 'Ограничения',
-    interpretation: 'Риторические наблюдения — это интерпретации. Доказательства могут быть неполными: проверяйте источники и контекст самостоятельно.',
+    interpretation: 'Привнесите свой взгляд. Эти наблюдения приглашают к размышлению: исследуйте источники, контекст и другие возможные прочтения.',
     supported: 'Подтверждено', contradicted: 'Опровергнуто', mixed: 'Неоднозначные данные', unverified: 'Не проверено', reasoningFailure: 'Ошибка рассуждения', rhetoricalObservation: 'Риторическое наблюдение',
     scapegoating: 'Поиск козла отпущения (Азазель)', selective_piety: 'Избирательное благочестие внутри группы (Крылья аиста)', shame_fear: 'Воздействие через стыд или страх', demagogy: 'Демагогия', victim_blaming: 'Обвинение жертвы / газлайтинг', intimidation: 'Запугивание', faulty_reasoning: 'Ошибочное рассуждение', other: 'Другой приём',
     demos: 'Попробуйте пример', demosHint: 'Загрузите отрывок и нажмите «Анализировать». Выводы не заданы заранее.', ancient: 'Древнее богословие', media: 'Современные СМИ / вирусные новости',

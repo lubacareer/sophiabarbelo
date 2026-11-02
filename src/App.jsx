@@ -5,6 +5,7 @@ import { presets } from './presets.js';
 import { buildAnnotations, withFindingLinks } from './annotations.js';
 import { explorerSearch, readExplorerRoute } from './pleroma/state.js';
 import { modelLabel, modelRequestSettings, parseModelConfig, rememberModel, savedModel, selectedModel } from './model-selection.js';
+import { parseSymbolicResponse, rememberSymbolicSetting, savedSymbolicSetting } from './symbolic-settings.js';
 
 const Explorer = lazy(() => import('./pleroma/Explorer.jsx'));
 const navigation = {
@@ -106,6 +107,18 @@ function Results({ result, isLoading, language, modelConfig }) {
           <p className="empty-state">{t(result ? 'noRhetoric' : 'rhetoricEmpty')}</p>}
       </section>
     </div>
+    {Array.isArray(result?.symbolicReadings) && <section className="symbolic-panel" aria-labelledby="symbolic-heading">
+      <h2 id="symbolic-heading">{t('symbolicReadings')}</h2>
+      <p className="panel-intro">{t('symbolicIntro')}</p>
+      {result.symbolicReadings.length ? result.symbolicReadings.map((reading, index) => <article className="finding symbolic-finding" key={index}>
+        <p className="symbolic-basis">{t(reading.basis === 'tradition' ? 'symbolicTradition' : 'symbolicReflection')}{reading.basis === 'tradition' && reading.tradition && <> · <bdi lang={result.analysisLanguage}>{reading.tradition}</bdi></>}</p>
+        <h3 dir="auto" lang={result.analysisLanguage}>{reading.title}</h3>
+        <blockquote dir="auto">{reading.excerpt}</blockquote>
+        <p dir="auto" lang={result.analysisLanguage}>{reading.reading}</p>
+        <p className="reflection-question" dir="auto" lang={result.analysisLanguage}>{reading.reflectionQuestion}</p>
+        <SourceLinks sources={reading.sources} language={language} />
+      </article>) : <p className="empty-state">{t('noSymbolicReadings')}</p>}
+    </section>}
     {result?.limitations?.length > 0 && <div className="limitations">
       <h3>{t('limitations')}</h3>
       <ul>{result.limitations.map((item, index) => <li key={index} dir="auto" lang={result.analysisLanguage}>{item}</li>)}</ul>
@@ -174,6 +187,7 @@ export default function App() {
   const [url, setUrl] = useState('');
   const [reasoningEffort, setReasoningEffort] = useState('');
   const [modelId, setModelId] = useState(savedModel);
+  const [includeSymbolicReadings, setIncludeSymbolicReadings] = useState(savedSymbolicSetting);
   const [configuration, setConfiguration] = useState({ status: 'loading', value: null });
   const [configAttempt, setConfigAttempt] = useState(0);
   const [result, setResult] = useState(null);
@@ -244,6 +258,7 @@ export default function App() {
   }, [configAttempt]);
 
   useEffect(() => { if (modelId) rememberModel(modelId); }, [modelId]);
+  useEffect(() => { rememberSymbolicSetting(includeSymbolicReadings); }, [includeSymbolicReadings]);
 
   function clearResult() { setResult(null); setView('edit'); setError(null); }
 
@@ -264,17 +279,21 @@ export default function App() {
     clearResult();
     setIsLoading(true);
     const requestLanguage = language;
+    const requestedSymbolicReadings = modelConfig?.symbolicReadings === true && includeSymbolicReadings;
     try {
       const endpoint = window.location.pathname.startsWith('/admin/') ? '/admin/api/analyze' : '/api/analyze';
       const response = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept-Language': requestLanguage },
-        body: JSON.stringify({ type, content, language: requestLanguage, ...modelSettings }),
+        body: JSON.stringify({ type, content, language: requestLanguage, ...modelSettings, ...(requestedSymbolicReadings ? { includeSymbolicReadings: true } : {}) }),
       });
       let data;
       try { data = await response.json(); } catch { throw responseError(translate(requestLanguage, 'unexpected')); }
       if (!response.ok) throw responseError(typeof data?.error === 'string' ? data.error : translate(requestLanguage, 'failed'));
       if (!Array.isArray(data?.claims) || !Array.isArray(data?.rhetoric) || typeof data?.sourceText !== 'string') throw responseError(translate(requestLanguage, 'incomplete'));
-      setResult({ ...data, analysisLanguage: requestLanguage });
+      let validated;
+      try { validated = parseSymbolicResponse(data, requestedSymbolicReadings); }
+      catch { throw responseError(translate(requestLanguage, 'incomplete')); }
+      setResult({ ...validated, analysisLanguage: requestLanguage });
       setView('highlights');
     } catch (err) {
       setError({ message: err?.publicMessage ? err.message : translate(requestLanguage, 'failed'), language: requestLanguage });
@@ -349,6 +368,10 @@ export default function App() {
             <option value="">{t('default')}</option><option value="low">{t('fast')}</option><option value="medium">{t('balanced')}</option><option value="high">{t('deep')}</option>
           </select>
         </div>}
+      </div>}
+      {modelConfig?.symbolicReadings && <div className="symbolic-setting">
+        <label><input type="checkbox" checked={includeSymbolicReadings} onChange={(event) => setIncludeSymbolicReadings(event.target.checked)} disabled={isLoading} aria-describedby="symbolic-setting-hint" />{t('exploreSymbolic')}</label>
+        <p id="symbolic-setting-hint">{t('symbolicHint')}</p>
       </div>}
       <div className="form-footer"><p>{t(type === 'text' ? 'textHint' : 'urlHint')}</p><button className="analyze-button" type="submit" disabled={isLoading || !canAnalyze}>{t(isLoading ? 'analyzing' : 'analyze')}</button></div>
       {isLoading && <p className="form-message" role="status">{t('loading')}</p>}

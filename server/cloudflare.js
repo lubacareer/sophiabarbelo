@@ -5,7 +5,7 @@ import { checkDeadline } from './deadline.js';
 
 const model = '@cf/zai-org/glm-4.7-flash';
 
-export async function analyzeWithCloudflare(text, { accountId = process.env.CLOUDFLARE_ACCOUNT_ID, apiToken = process.env.CLOUDFLARE_API_TOKEN, tavilyApiKey = process.env.TAVILY_API_KEY, language, fetchImpl = fetch, signal, deadline, logger } = {}) {
+export async function analyzeWithCloudflare(text, { accountId = process.env.CLOUDFLARE_ACCOUNT_ID, apiToken = process.env.CLOUDFLARE_API_TOKEN, tavilyApiKey = process.env.TAVILY_API_KEY, language, fetchImpl = fetch, signal, deadline, logger, includeSymbolicReadings = false } = {}) {
   if (typeof accountId !== 'string' || !/^[a-f0-9]{32}$/i.test(accountId) || !apiToken) throw new AppError(503, 'Analysis is temporarily unavailable. Please try again later.');
   async function complete({ system, input, schema, maxTokens, signal: requestSignal, deadline: stageDeadline }) {
     checkDeadline(stageDeadline, requestSignal);
@@ -23,5 +23,5 @@ export async function analyzeWithCloudflare(text, { accountId = process.env.CLOU
     checkDeadline(stageDeadline, requestSignal);
     return parsed;
   }
-  return analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline });
+  return analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline, includeSymbolicReadings });
 }

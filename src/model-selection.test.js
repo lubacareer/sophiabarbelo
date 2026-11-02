@@ -98,3 +98,14 @@ test('result attribution resolves its response model independently of the next s
   assert.equal(modelLabel('luna', config), 'GPT-6 Luna');
   assert.equal(modelLabel('grok-4.7'), 'Grok 4.7', 'Attribution remains available while configuration reloads.');
 });
+
+test('symbolic capability requires explicit true and keeps old deployed/local configuration compatible', () => {
+  for (const input of [configured(), { reasoningControls: true }]) {
+    const legacy = parseModelConfig(input);
+    assert.equal(Object.hasOwn(legacy, 'symbolicReadings'), false);
+    assert.equal(parseModelConfig({ ...input, symbolicReadings: true }).symbolicReadings, true);
+    for (const symbolicReadings of [false, undefined, null, 'true', 1, {}, []]) {
+      assert.equal(Object.hasOwn(parseModelConfig({ ...input, symbolicReadings }), 'symbolicReadings'), false);
+    }
+  }
+});

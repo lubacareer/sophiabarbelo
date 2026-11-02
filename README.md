@@ -1,14 +1,18 @@
 ﻿# Sophia’s Mirror
 
-Sophia’s Mirror explores factual claims and rhetorical techniques in text or a public article. It uses web search to find relevant sources, and presents rhetorical observations as interpretations—not proof of intent or a guarantee of neutrality. Claims without sufficient cited evidence remain unverified.
+Sophia’s Mirror explores factual claims, rhetoric, and possible symbolic meanings in text or a public article. Bring your curiosity and your own interpretation: web research supports checkable claims, while optional symbolic readings invite archetypal, Tarot, astrological, and other associations. Claims without sufficient cited evidence remain unverified.
 
 ## Pleroma 3D
 
-Open **Pleroma 3D** in the navigation to explore the Secret Book of John, Ezekiel’s wheels, a ten-sefirot Tree of Life schematic, and Plotinus’s principles. The explorer has a Three.js / React Three Fiber 3D view and an interactive SVG 2D view, with exact credited source passages and separate English, Hebrew, and Russian editorial explanations. Mobile starts in 2D; unavailable or lost WebGL falls back to the same interactive map and source inspector.
+Open **Pleroma 3D** in the navigation to explore the Secret Book of John, Ezekiel’s wheels, the ten-sefirot Tree of Life, and Plotinus’s principles. The explorer has a Three.js / React Three Fiber 3D view and an interactive SVG 2D view, with exact credited source passages and English, Hebrew, and Russian invitations to explore their meanings. Mobile starts in 2D; unavailable or lost WebGL falls back to the same interactive map and source inspector.
 
 All diagram connections are curved. Selecting a figure illuminates it and briefly sends light along its connections; reduced-motion preferences retain a static view. Zoom, Fit, layer controls, and List view provide alternatives to dragging the 3D camera. Switching back to Analyze preserves the current input and results.
 
-Interpretive overlays are optional and off by default: twelve sourced aeons can be drawn as twenty-four modern masculine/feminine aspect markers; Cicero’s classical planetary ordering is shown separately from the seven Gnostic heavens; torus forms are a modern geometric reading of Ezekiel’s wheels. Spatial layouts and Tree connectors are editorial reconstructions, not claims that these traditions describe identical entities or physical cosmic distances.
+Overlays are optional and off by default: paired aeon aspects, Cicero’s classical planets, Ezekiel’s torus forms, and the Tree’s **Tarot** and **Astrology** layers. The Tree uses **777 (1909)** for its 22 selectable curved paths and ten celestial associations. Source gives each correspondence’s attribution; Ways to explore welcomes other readings and intuition.
+
+**My connections** lets visitors connect figures in any map with other figures, Tarot and astrological symbols, or a name of their own. Connections and notes stay in that browser on that site, with JSON export/import for backup and transfer. There is no account or server storage, and personal notes are never automatically sent to analysis providers.
+
+On both public and administrator sites, **Explore symbolic meanings** adds up to three possible readings to the next analysis. It uses the selected model’s existing research pipeline and the same visitor quotas and deadlines. Existing results remain attached to their original language and model when settings change. See [symbolic exploration and validation](docs/symbolic-exploration.md).
 
 Source passages and graphics are bundled locally. Exploring does not call an analysis provider, use Redis, or consume model credits. The 3D renderer loads only when 3D is selected. Bookmarkable query parameters preserve the site's pathname and analysis finding anchors. See [source editions and reuse provenance](docs/pleroma-sources.md) and [the design specification](docs/pleroma-design.md).
 

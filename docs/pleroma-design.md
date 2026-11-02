@@ -5,25 +5,28 @@ Current implementation references:
 - [Desktop screenshot](images/pleroma-desktop.png)
 - [Mobile screenshot](images/pleroma-mobile.png)
 
-These repository screenshots capture the implemented, approved mint/Nunito UI
-revision. The UI matches the main-branch analyzer, with mint surfaces and Nunito
-throughout. The screenshots document the visualization treatment; source records
+These repository screenshots capture the bright grass-green revision with
+translucent mint surfaces and Nunito. Desktop shows the Tree in 3D with the
+Hermetic overlays; mobile shows the same correspondences in Hebrew and 2D.
+The screenshots document the visualization treatment; source records
 and deterministic layouts supply the diagrams and their source-based topology.
 
 ## Visual system
 
-UI surfaces use the analyzer's mint #d8f0df and #e4f6e9, borders #b8d9c4,
-ink #061b12, and green accent #246d50. Rounded controls, menus, and reading
+UI surfaces use the analyzer's generated book-of-wisdom background and translucent
+bright grass-tinted mint panels, borders #9cce84, headings #173d30, body #254638,
+lime selected controls #7bec52, and structural green #286d32. Rounded controls, menus, and reading
 surfaces follow the analyzer's visual language. Use local Nunito throughout,
 including headings, source quotations, and diagram labels, with sans-serif
-fallbacks for glyphs outside the bundled font. The reading inspector is opaque.
+fallbacks for glyphs outside the bundled font. The reading inspector uses mint
+glass and an 18px backdrop blur, matching the analyzer's rhetoric panels.
 
 The visualization retains its explicit deep evergreen #081713 canvas, existing
 gold illumination, sage labels, curved luminous connections, radiant centers,
 finite selection bursts, static stars, and separately generated cloud. Styling
 the surrounding page must not tint the transparent WebGL canvas. Diagram-label
 changes are limited to font family; their sizes, colors, anchors, and shadows
-remain unchanged. No card grids or marketing sections are added.
+remain unchanged. The My connections editor uses compact forms and a local collection list.
 
 Desktop: quiet 56px brand/navigation header, title and one tradition toolbar,
 large canvas and a roughly 360–410px reading inspector. The inspector can close.
@@ -36,7 +39,7 @@ RTL changes text and chrome, never the chosen diagram's geometric orientation.
 Header: Sophia’s Mirror; Analyze; Pleroma 3D; language selector.
 Title: Pleroma 3D; Explore four traditions of the cosmos.
 Traditions: Secret Book of John; Ezekiel’s wheels; Tree of Life; Plotinus.
-Controls: 2D / 3D; Interpretive overlays; Paired aspects; Classical planetary
+Controls: 2D / 3D; Explore correspondences; My connections; Tarot; Astrology; Paired aspects; Classical planetary
 comparison; Toroidal visualization; Center / Pleroma / Sophia’s cloud /
 Seven heavens where applicable; zoom in / out; Fit; List view.
 Inspector: selected entity, category, Source / Interpretation, exact passage,

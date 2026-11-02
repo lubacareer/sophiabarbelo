@@ -1,12 +1,12 @@
 import { useId, useMemo } from 'react';
-import { getScene, focusFor, curvePath, textFor, WIDTH, HEIGHT } from './geometry.js';
+import { getScene, focusFor, curvePath, pointOnCurve, textFor, WIDTH, HEIGHT } from './geometry.js';
 import './atlas.css';
 
 const title = { en: 'Interactive cosmology map', he: 'מפת קוסמולוגיה אינטראקטיבית', ru: 'Интерактивная карта космологии' };
 
-export default function Atlas2D({ tradition, language = 'en', selectedId, onSelect, overlays = {}, zoom = 1, focusLayer = 'all', reducedMotion = false, eventKey = 0, cameraKey = 0, cloudUrl }) {
+export default function Atlas2D({ tradition, language = 'en', selectedId, onSelect, selectedPathId, onSelectPath, onSelectAssociation, personalConnections = [], selectedPersonalId, onSelectPersonal, overlays = {}, zoom = 1, focusLayer = 'all', reducedMotion = false, eventKey = 0, cameraKey = 0, cloudUrl }) {
   const uid = useId().replace(/:/g, '');
-  const scene = useMemo(() => getScene(tradition, overlays), [tradition, overlays.paired, overlays.planets, overlays.torus]);
+  const scene = useMemo(() => getScene(tradition, overlays, personalConnections), [tradition, overlays.paired, overlays.planets, overlays.torus, overlays.tarot, overlays.astrology, personalConnections]);
   const focus = focusFor(scene, focusLayer);
   const scale = Math.max(0.55, Math.min(3.0, zoom)) * focus.scale;
   const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches;
@@ -15,7 +15,15 @@ export default function Atlas2D({ tradition, language = 'en', selectedId, onSele
     : narrow && mobileFrames[tradition.id] ? mobileFrames[tradition.id] : `0 0 ${WIDTH} ${HEIGHT}`;
   const transform = `translate(${WIDTH / 2} ${HEIGHT / 2}) scale(${scale}) translate(${-focus.center[0]} ${-focus.center[1]})`;
   const select = (event, id) => { event.stopPropagation(); onSelect(id); };
-  const selected = scene.canonical.find((marker) => marker.id === selectedId);
+  const selectedEdge = scene.edges.find((edge) => edge.id === selectedPathId || edge.personal?.id === selectedPersonalId);
+  const selected = selectedEdge ? { id: selectedEdge.id, position: pointOnCurve(selectedEdge.points, .5) } : scene.canonical.find((marker) => marker.id === selectedId);
+  const chooseEdge = (event, edge) => { event.stopPropagation();
+    if (edge.personal) onSelectPersonal?.(edge.personal.id);
+    else if (edge.association) (onSelectAssociation || onSelectPath)?.(edge.id);
+    else onSelectPath?.(edge.id);
+  };
+  const edgeLabel = (edge) => edge.personal ? edge.personal.label : edge.association ? textFor(edge.association.label, language)
+    : [overlays.tarot && textFor(edge.correspondence.label, language), overlays.astrology && textFor(edge.correspondence.astrology.label, language)].filter(Boolean).join(' · ');
   // These sparse curved wisps are illumination, not additional graph edges.
   // Their fixed coordinates leave the resting atlas still, including reduced motion.
   const lightWisps = useMemo(() => Array.from({ length: 12 }, (_, i) => {
@@ -52,14 +60,43 @@ export default function Atlas2D({ tradition, language = 'en', selectedId, onSele
       </g>)}</g>
       {scene.cloud && cloudUrl && <image href={cloudUrl} x={scene.cloud.position[0] - 150} y={scene.cloud.position[1] - 107} width="300" height="145" opacity={focusLayer === 'cloud' ? .95 : .55} aria-hidden="true" />}
       {scene.cloud && !cloudUrl && <ellipse cx={scene.cloud.position[0]} cy={scene.cloud.position[1] - 7} rx="128" ry="39" fill="#bed6ca" opacity=".14" filter={`url(#${uid}-mist)`} aria-hidden="true" />}
-      <g aria-hidden="true">{scene.edges.map((edge) => <g key={edge.id} opacity={edge.to.kind === 'heaven' && focusLayer !== 'heavens' ? .1 : .86}>
+      <g aria-hidden="true" pointerEvents="none">{scene.edges.map((edge) => <g key={edge.id} opacity={edge.to.kind === 'heaven' && focusLayer !== 'heavens' ? .1 : .86}>
         <path d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke="#f4bf53" strokeWidth="7" opacity=".24" filter={`url(#${uid}-glow)`} />
-        <path d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke={edge.kind === 'interpretive' ? '#b5d7c8' : '#f6d58b'} strokeWidth="1.75" opacity=".9" strokeDasharray={edge.kind === 'interpretive' ? '5 7' : undefined} />
-        {edge.kind !== 'interpretive' && <path d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke="#fff6d4" strokeWidth=".55" opacity=".7" />}
+        <path d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke={edge.kind === 'personal' ? '#ceb3f1' : edge.kind === 'interpretive' ? '#b5d7c8' : '#f6d58b'} strokeWidth={edge === selectedEdge ? 3.5 : 1.75} opacity=".9" strokeDasharray={edge.kind === 'personal' ? '3 5' : edge.kind === 'interpretive' ? '5 7' : undefined} />
+        {!['interpretive', 'personal'].includes(edge.kind) && <path d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke="#fff6d4" strokeWidth=".55" opacity=".7" />}
       </g>)}</g>
+      <g className="atlas-path-targets">{scene.edges.filter((edge) => edge.correspondence || edge.association || edge.personal).map((edge) => {
+        const active = edge === selectedEdge;
+        return <g key={edge.id} className="atlas-svg-path" role="button" tabIndex={0} aria-label={edgeLabel(edge)} aria-pressed={active}
+          data-path-id={edge.personal ? undefined : edge.id} data-personal-id={edge.personal?.id}
+          onClick={(event) => chooseEdge(event, edge)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); chooseEdge(event, edge); } }}>
+          <title>{edgeLabel(edge)}</title>
+          <path className="atlas-path-hit" d={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="none" stroke="transparent" strokeWidth="24" />
+        </g>;
+      })}</g>
+      {/* Badge proxies sit above every curved hit stroke; keyboard access is on the named path targets. */}
+      <g className="atlas-path-badges" aria-hidden="true">{scene.edges.filter((edge) => edge.correspondence).map((edge) => {
+        const midpoint = pointOnCurve(edge.points, .5), active = edge === selectedEdge;
+        return <g key={edge.id} data-path-badge={edge.id} transform={`translate(${midpoint.join(' ')})`} onClick={(event) => chooseEdge(event, edge)}>
+          <circle r="13" fill="#10291f" stroke={active ? '#fff2c5' : '#badcc9'} strokeWidth={active ? 2.5 : 1} />
+          <text className="atlas-correspondence-glyph" y="5" textAnchor="middle">{overlays.astrology ? edge.correspondence.astrology.glyph : edge.correspondence.order}</text>
+        </g>;
+      })}</g>
+      <g className="atlas-extra-markers">{[...scene.associations, ...scene.personalMarkers].map((marker) => {
+        const active = marker.personalId ? marker.personalId === selectedPersonalId : marker.id === selectedPathId;
+        const label = textFor(marker.node.label, language);
+        const choose = (event) => { event.stopPropagation(); if (marker.personalId) onSelectPersonal?.(marker.personalId); else (onSelectAssociation || onSelectPath)?.(marker.id); };
+        return <g key={marker.id} role="button" tabIndex={0} className="atlas-svg-node atlas-extra-marker" aria-label={label} aria-pressed={active}
+          data-path-id={marker.kind === 'association' ? marker.id : undefined} data-personal-id={marker.personalId}
+          transform={`translate(${marker.position.join(' ')})`} onClick={choose} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(event); } }}>
+          <title>{label}</title><circle r="23" fill="transparent" /><circle r="17" fill="#10291f" stroke={active ? '#fff3c4' : marker.personalId ? '#ceb3f1' : '#badcc9'} strokeWidth={active ? 3 : 1.5} />
+          <text className="atlas-correspondence-glyph" y="7" textAnchor="middle" fontSize="24">{marker.glyph}</text>
+          {active && <text className="atlas-svg-label atlas-extra-label" y="44" textAnchor="middle" direction={language === 'he' ? 'rtl' : 'ltr'}>{label.length > 38 ? label.slice(0, 35) + '…' : label}</text>}
+        </g>;
+      })}</g>
       {overlays.paired && tradition.id === 'john' && <g aria-hidden="true">{scene.canonical.filter((m) => m.kind === 'aeon').map((marker) => <path key={marker.id} d={curvePath([marker.position[0] - 11, marker.position[1]], [marker.position[0] + 11, marker.position[1]], -.35)} fill="none" stroke="#a5c9bb" strokeWidth="1.3" strokeDasharray="3 3" />)}</g>}
       <g className="atlas-svg-nodes">{scene.markers.map((marker) => {
-        const active = marker.canonicalParentId === selectedId;
+        const active = !selectedEdge && marker.canonicalParentId === selectedId;
         const label = textFor(marker.node.label, language);
         const core = ['barbelo', 'invisible-spirit', 'one'].includes(marker.canonicalParentId);
         const size = marker.kind === 'sefirah' ? 20 : marker.major ? core ? 23 : 18 : marker.aspect ? 8 : 9;
@@ -85,11 +122,11 @@ export default function Atlas2D({ tradition, language = 'en', selectedId, onSele
           {visibleLabel && <text className={`atlas-svg-label${core ? ' atlas-svg-label-core' : ''}`} y={labelY} textAnchor={labelAnchor} direction={language === 'he' ? 'rtl' : 'ltr'}>{labelLines.map((line, index) => <tspan key={index} x={labelX} dy={index ? '1.15em' : '0'} fontSize={index ? '.9em' : undefined}>{line}</tspan>)}</text>}
         </g>;
       })}</g>
-      {!reducedMotion && selected && <g className="atlas-selection-burst" key={`${eventKey}-${selectedId}`} transform={`translate(${selected.position.join(' ')})`} aria-hidden="true">
+      {!reducedMotion && selected && <g className="atlas-selection-burst" key={`${eventKey}-${selected.id}`} transform={`translate(${selected.position.join(' ')})`} aria-hidden="true">
         <circle r="75" fill={`url(#${uid}-halo)`} className="atlas-burst-disc" />
         {Array.from({ length: 9 }, (_, i) => <path key={i} d={curvePath([0, 0], [Math.cos(i * 2.4) * 103, Math.sin(i * 2.4) * 103], .3)} fill="none" stroke="#ffdfa0" strokeWidth="1.3" className="atlas-burst-ray" style={{ '--ray-delay': `${i * 20}ms` }} />)}
       </g>}
-      {!reducedMotion && <g key={`sparks-${eventKey}`} aria-hidden="true" pointerEvents="none">{scene.edges.filter((edge) => edge.from.id === selectedId || edge.to.id === selectedId).slice(0, 7).map((edge) => <circle key={edge.id} r="3.6" fill="#fff5cd" className="atlas-moving-spark"><animateMotion dur="1.2s" repeatCount="1" path={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="freeze" /></circle>)}</g>}
+      {!reducedMotion && <g key={`sparks-${eventKey}`} aria-hidden="true" pointerEvents="none">{scene.edges.filter((edge) => edge === selectedEdge || edge.from.id === selectedId || edge.to.id === selectedId).slice(0, 7).map((edge) => <circle key={edge.id} r="3.6" fill="#fff5cd" className="atlas-moving-spark"><animateMotion dur="1.2s" repeatCount="1" path={curvePath(edge.from.position, edge.to.position, edge.bend)} fill="freeze" /></circle>)}</g>}
     </g>
   </svg>;
 }

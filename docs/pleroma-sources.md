@@ -24,7 +24,15 @@ Curated on **2026-11-01**. Source passages are bundled locally in the lazy-loade
 - [Version-specific API](https://www.sefaria.org/api/texts/Tikkunei_Zohar.17a?lang=he&vhe=Tikkunei%20Zohar%20-%20Vocalized&context=0). Chokhmah's phrase spans digital segments 16–17. Short excerpts retain the selected edition's exact spelling/vocalization; full context includes segments 16–18.
 - Ten-count: **Sefer Yetzirah 1:4**, exact English version **Sefer Yezirah, trans. by Isidor Kalisch. New York, 1877**. Its API `license` was `Public Domain` and `versionTitle` matched that version. [Version-specific API](https://www.sefaria.org/api/texts/Sefer_Yetzirah.1.4?lang=en&ven=Sefer%20Yezirah%2C%20trans.%20by%20Isidor%20Kalisch.%20New%20York%2C%201877&context=0).
 - English, Hebrew, and Russian explanatory glosses are editorial, not translated historical quotations. The exact Aramaic source remains visibly distinct from them.
-- The visualization is a **later three-column Jewish teaching schematic**, with Keter included and no additional Da'at node. The thirteen curved connectors are editorial layout aids, not a claim that these precise paths occur in either cited passage. There are no Tarot, Hebrew-letter, planetary, or "twenty-two paths" assignments. UI language changes do not mirror the selected diagram convention.
+- The base visualization is a **later three-column teaching schematic**, with Keter included and no additional Da'at node. Its thirteen curved connectors are layout aids. Optional Hermetic layers use the separately sourced twenty-two-path system below; enabling them replaces the base connectors. UI language changes do not mirror the selected diagram convention.
+
+## Hermetic correspondences — 777 (1909)
+
+- [Original Table of Correspondences scan](https://keepsilence.org/the-equinox/777/table-of-correspondences_low.pdf), Aleister Crowley, 1909. The original historical tables are public domain; modern introductions, revised editions, and commercial Tarot artwork are not bundled.
+- Table I, column II gives Hebrew letters and names; VII gives celestial/elemental associations; XII gives Tree endpoints; XIV gives Tarot assignments. References identify columns and key-scale rows. The relevant scan pages are PDF pages 2–5 (one-based).
+- All 22 paths use key-scale rows 11–32. Emperor/Aries remains at 15, Star/Aquarius at 28, Strength/Leo at 19, and Justice/Libra at 22. Later revisions are not mixed into this named edition. Supplementary Earth/Spirit rows do not add paths.
+- Rows 1–10 supply the ten celestial associations. Each of the 32 selectable correspondence records has a source record quoting an original table cell. Contemporary display labels such as “The Magician” can differ from the credited cell “The Juggler”; the Source tab retains the historical wording.
+- Tarot and astrology are two display facets of this one system. Visitors may add their own associations in My connections across all four maps; personal notes retain their personal attribution and are not inserted into historical source records.
 
 ## Plotinus
 

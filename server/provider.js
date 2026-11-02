@@ -20,6 +20,7 @@ export async function analyzeConfigured(text, options = {}, {
       ...(options.language !== undefined ? { language: options.language } : {}),
       ...(options.signal !== undefined ? { signal: options.signal } : {}),
       ...(options.deadline !== undefined ? { deadline: options.deadline } : {}),
+      ...(options.includeSymbolicReadings !== undefined ? { includeSymbolicReadings: options.includeSymbolicReadings } : {}),
       model: selected.model,
       ...(selected.provider !== 'xai' ? { requireCitations: true } : {}),
     };

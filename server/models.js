@@ -40,7 +40,7 @@ export function supportsReasoning({ deployment = 'local', modelId, environment =
 export function analysisConfiguration({ deployment = 'local', environment = process.env } = {}) {
   assertDeployment(deployment);
   // Local/Caddy use their existing environment-selected provider and controls.
-  if (deployment === 'local') return { reasoningControls: supportsReasoning({ deployment, environment }) };
+  if (deployment === 'local') return { reasoningControls: supportsReasoning({ deployment, environment }), symbolicReadings: true };
   return {
     models: models.map(({ id, label, access, ...model }) => {
       const available = configured(model, deployment, environment);
@@ -48,12 +48,16 @@ export function analysisConfiguration({ deployment = 'local', environment = proc
     }),
     defaultModelId: DEFAULT_MODEL_ID,
     reasoningControls: false,
+    symbolicReadings: true,
   };
 }
 
 export function resolveAnalysisModel(options = {}, { deployment = 'local', environment = process.env } = {}) {
   assertDeployment(deployment);
   const { modelId, reasoningEffort } = options;
+  if (options.includeSymbolicReadings !== undefined && typeof options.includeSymbolicReadings !== 'boolean') {
+    throw new AppError(400, 'Choose a valid symbolic reading setting.');
+  }
   if (reasoningEffort !== undefined && !['low', 'medium', 'high'].includes(reasoningEffort)) {
     throw new AppError(400, 'Choose a valid reasoning setting.');
   }
