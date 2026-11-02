@@ -1,5 +1,7 @@
 import { AppError } from './errors.js';
 
+const providerHosts = new Set(['generativelanguage.googleapis.com', 'api.cloudflare.com', 'api.tavily.com']);
+
 export function incompleteResult() {
   return new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
 }
@@ -26,7 +28,7 @@ function withSignal(promise, signal) {
 
 // Every request, including reading its JSON body, shares the analysis deadline.
 // Only trusted, already localized application messages leave this boundary.
-export async function requestJson(url, { headers, body, fetchImpl, signal, timeoutMs = 120_000, research = false }) {
+export async function requestJson(url, { headers, body, fetchImpl, signal, timeoutMs = 120_000, research = false, logger = console.warn }) {
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)].filter(Boolean));
   let response;
   try {
@@ -34,6 +36,14 @@ export async function requestJson(url, { headers, body, fetchImpl, signal, timeo
     response = await withSignal(fetchImpl(url, { method: 'POST', redirect: 'error', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: requestSignal }), requestSignal);
   } catch { throw research ? researchUnavailable() : new AppError(502, 'The analysis service could not be reached. Please try again.'); }
   if (!response?.ok) {
+    // Never log the request URL, credentials, input, or provider response body.
+    // Restrict diagnostics to known fixed API hosts and real HTTP status codes.
+    try {
+      const hostname = new URL(url).hostname;
+      if (providerHosts.has(hostname) && Number.isInteger(response?.status) && response.status >= 100 && response.status <= 599 && typeof logger === 'function') {
+        logger('Analysis provider returned an error.', { provider: hostname, status: response.status });
+      }
+    } catch { /* Diagnostics must never replace the safe application error. */ }
     if ([401, 403].includes(response?.status)) throw new AppError(503, 'The analysis service credentials are invalid or do not have access.');
     if ([402, 429, 430, 432, 433, 434].includes(response?.status)) {
       const error = new AppError(response.status === 429 ? 429 : 503, 'The analysis service is busy or has reached its limit. Please try again later.');
