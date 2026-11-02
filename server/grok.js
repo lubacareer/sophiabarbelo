@@ -1,7 +1,7 @@
 import { AppError } from './errors.js';
 import { localize, outputLanguageInstruction } from './localization.js';
 import { passageAnalysisInstruction } from './analysis-instruction.js';
-import { awaitWithSignal, checkDeadline } from './deadline.js';
+import { awaitWithSignal, checkDeadline, deadlineExceeded } from './deadline.js';
 import { symbolicSchema, symbolicAnalysisInstruction, symbolicResearchInstruction } from './symbolic.js';
 
 export const rhetoricCategories = ['scapegoating', 'selective_piety', 'shame_fear', 'demagogy', 'victim_blaming', 'intimidation', 'faulty_reasoning', 'other'];
@@ -40,12 +40,12 @@ function normalizeUrl(value) {
 
 function providerUrls(data) {
   const urls = new Set();
-  for (const citation of data.citations || []) {
+  for (const citation of Array.isArray(data?.citations) ? data.citations : []) {
     const url = normalizeUrl(typeof citation === 'string' ? citation : citation?.url);
     if (url) urls.add(url);
   }
-  for (const item of data.output || []) for (const content of item.content || []) {
-    for (const annotation of content.annotations || []) {
+  for (const item of Array.isArray(data?.output) ? data.output : []) for (const content of Array.isArray(item?.content) ? item.content : []) {
+    for (const annotation of Array.isArray(content?.annotations) ? content.annotations : []) {
       const url = normalizeUrl(annotation?.url || annotation?.url_citation?.url);
       if (url) urls.add(url);
     }
@@ -93,10 +93,67 @@ function checkActive(deadline, signal) {
   if (signal?.aborted) throw new AppError(502, 'The analysis service could not be reached. Please try again.');
 }
 
-export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), language, fetchImpl = fetch, signal, deadline, includeSymbolicReadings = false } = {}) {
+function incompleteResult(reason) {
+  return Object.assign(new AppError(502, 'The analysis service returned an incomplete result. Please try again.'), { grokFailureReason: reason });
+}
+
+function assistantMessages(provider) {
+  return (Array.isArray(provider?.output) ? provider.output : [])
+    .filter((item) => item?.type === 'message' && (item.role === undefined || item.role === 'assistant'));
+}
+
+function finalOutputText(provider) {
+  if (!provider || !Array.isArray(provider.output)) throw incompleteResult('response_shape');
+  // An explicitly unsuccessful response is never a usable final answer.
+  if (provider.status !== undefined && provider.status !== 'completed') throw incompleteResult('response_status');
+  if (provider.error != null) throw incompleteResult('response_error');
+  const message = assistantMessages(provider).at(-1);
+  if (!message) throw incompleteResult('message_missing');
+  if (message.status !== undefined && message.status !== 'completed') throw incompleteResult('message_status');
+  if (!Array.isArray(message.content)) throw incompleteResult('response_shape');
+  if (message.content.some((item) => item?.type === 'refusal')) throw incompleteResult('refusal');
+  const fragments = message.content.filter((item) => item?.type === 'output_text');
+  if (!fragments.length) throw incompleteResult('output_text_missing');
+  if (fragments.some((item) => typeof item.text !== 'string')) throw incompleteResult('response_shape');
+  // Join only the final answer's fragments, without inserting characters into JSON.
+  const output = fragments.map((item) => item.text).join('');
+  if (!output.trim()) throw incompleteResult('output_text_missing');
+  return output;
+}
+
+const diagnosticReasons = new Set(['transport', 'http_error', 'body_read', 'response_shape', 'response_status', 'response_error', 'message_missing', 'message_status', 'refusal', 'output_text_missing', 'invalid_json', 'invalid_shape']);
+const responseStatuses = new Set(['completed', 'in_progress', 'incomplete', 'failed', 'cancelled', 'queued']);
+
+function warnFailure({ logger, phase, reason, timeoutSignal, requestSignal, deadline, provider, httpStatus, parsed, includeSymbolicReadings }) {
+  try {
+    if (typeof logger !== 'function') return;
+    const messages = assistantMessages(provider);
+    const message = messages.at(-1);
+    const expired = deadline?.remainingMs?.() === 0;
+    const failure = expired ? 'deadline' : timeoutSignal.aborted && requestSignal.reason === timeoutSignal.reason ? 'timeout' : requestSignal.aborted ? 'cancelled' : diagnosticReasons.has(reason) ? reason : 'invalid_shape';
+    // External cancellation may carry arbitrary private error text. Log only
+    // fixed classifications, known statuses, and structural counts.
+    logger('Grok analysis request failed.', {
+      phase,
+      reason: failure,
+      ...(phase === 'validation' && failure === 'invalid_shape' ? {
+        invalidArrays: ['claims', 'rhetoric', 'limitations', ...(includeSymbolicReadings ? ['symbolicReadings'] : [])].filter((field) => !Array.isArray(parsed?.[field])),
+      } : {}),
+      ...(responseStatuses.has(provider?.status) ? { responseStatus: provider.status } : {}),
+      ...(responseStatuses.has(message?.status) ? { messageStatus: message.status } : {}),
+      ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? { httpStatus } : {}),
+      ...(Array.isArray(provider?.output) ? { outputCount: provider.output.length, messageCount: messages.length } : {}),
+      ...(Array.isArray(message?.content) ? { textBlockCount: message.content.filter((item) => item?.type === 'output_text').length } : {}),
+    });
+  } catch { /* Diagnostics never replace the safe application error. */ }
+}
+
+export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), language, fetchImpl = fetch, signal, deadline, includeSymbolicReadings = false, logger = console.warn } = {}) {
   checkActive(deadline, signal);
   if (!apiKey) throw new AppError(503, 'Analysis is unavailable: configure XAI_API_KEY on the server.');
-  const requestSignal = AbortSignal.any([signal, deadline?.signal, AbortSignal.timeout(120_000)].filter(Boolean));
+  const timeoutSignal = AbortSignal.timeout(120_000);
+  const requestSignal = AbortSignal.any([signal, deadline?.signal, timeoutSignal].filter(Boolean));
+  const diagnostic = { logger, timeoutSignal, requestSignal, deadline };
   let response;
   try {
     response = await awaitWithSignal(fetchImpl('https://api.x.ai/v1/responses', {
@@ -112,10 +169,13 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
     }), requestSignal);
     checkActive(deadline, signal);
   } catch {
+    warnFailure({ ...diagnostic, phase: 'fetch', reason: 'transport' });
     checkDeadline(deadline);
+    if (timeoutSignal.aborted && requestSignal.reason === timeoutSignal.reason) throw deadlineExceeded();
     throw new AppError(502, 'The analysis service could not be reached. Please try again.');
   }
   if (!response.ok) {
+    warnFailure({ ...diagnostic, phase: 'fetch', reason: 'http_error', httpStatus: response.status });
     if (response.status === 401 || response.status === 403) throw new AppError(503, 'The analysis service credentials are invalid or do not have access.');
     if (response.status === 429) {
       const error = new AppError(503, 'The analysis service is busy or has reached its limit. Please try again later.');
@@ -124,17 +184,29 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
     }
     throw new AppError(502, 'The analysis service could not complete the request. Please try again.');
   }
+  let provider;
+  let parsed;
+  let phase = 'body';
+  let reason = 'body_read';
   try {
-    const provider = await awaitWithSignal(response.json(), requestSignal);
+    provider = await awaitWithSignal(response.json(), requestSignal);
     checkActive(deadline, signal);
-    const output = provider.output?.find((item) => item.type === 'message')?.content?.find((item) => item.type === 'output_text')?.text;
-    const parsed = JSON.parse(output);
+    phase = 'response';
+    reason = 'response_shape';
+    const output = finalOutputText(provider);
+    phase = 'parse';
+    reason = 'invalid_json';
+    parsed = JSON.parse(output);
     checkActive(deadline, signal);
+    phase = 'validation';
+    reason = 'invalid_shape';
     const result = validatedResult(parsed, provider, text, language, { includeSymbolicReadings });
     checkActive(deadline, signal);
     return result;
   } catch (error) {
+    warnFailure({ ...diagnostic, phase, reason: error?.grokFailureReason || (phase === 'body' && error instanceof SyntaxError ? 'invalid_json' : reason), provider, parsed, includeSymbolicReadings });
     checkDeadline(deadline);
+    if (timeoutSignal.aborted && requestSignal.reason === timeoutSignal.reason) throw deadlineExceeded();
     if (requestSignal.aborted) throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
     if (error instanceof AppError) throw error;
     throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');

@@ -362,7 +362,7 @@ test('Grok retains its 120-second request cap independently of the parent budget
   const started = deferred();
   const work = analyzeWithGrok('Claim', { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => { started.resolve(); return new Promise(() => {}); } });
   await started.promise;
-  const rejected = assert.rejects(work, (error) => error.status === 502 && !error.message.includes('private'));
+  const rejected = assert.rejects(work, (error) => error.status === 504 && error.message === 'The analysis took too long. Please try again.');
   cap.abort(new AppError(499, 'private request-cap reason'));
   await rejected;
   assert.deepEqual(timeouts, [120_000]);
