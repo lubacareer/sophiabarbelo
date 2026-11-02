@@ -1,9 +1,9 @@
 .atlas-svg,.atlas-three { display:block;width:100%;height:100%;min-height:inherit;outline:none; }
 .atlas-svg { overflow:visible;touch-action:pan-y; }
 .atlas-svg-world { transform-box:fill-box;animation:atlas-scene-arrive .65s ease both; }
-.atlas-svg-label { fill:#e4eee4;font-family:'Nunito','Trebuchet MS',sans-serif;font-size:23px;font-weight:500;paint-order:stroke;stroke:#081713;stroke-width:5px;stroke-linejoin:round;pointer-events:none; }
+.atlas-svg-label { fill:#e4eee4;font-family:var(--font-ui);font-size:23px;font-weight:500;paint-order:stroke;stroke:#081713;stroke-width:5px;stroke-linejoin:round;pointer-events:none; }
 .atlas-svg-label-core { font-size:25px;font-weight:600; }
-.atlas-svg-number { fill:#183322;font-size:17px;font-family:'Nunito',sans-serif;font-weight:700;pointer-events:none; }
+.atlas-svg-number { fill:#183322;font-size:17px;font-family:var(--font-ui);font-weight:700;pointer-events:none; }
 .atlas-svg-node { cursor:pointer;outline:none; }
 .atlas-svg-node:hover>circle:last-of-type { stroke:#fffbe5;stroke-width:3; }
 .atlas-svg-node:focus-visible>circle:last-of-type { stroke:#fff;stroke-width:4; }
@@ -16,14 +16,23 @@
 .atlas-three::after { content:'';position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 95px 20px #06151055; }
 .atlas-three canvas { display:block;width:100%;height:100%;outline:none;touch-action:none; }
 .atlas-three-labels { position:absolute;inset:0;pointer-events:none;overflow:hidden; }
-.atlas-three-label { position:absolute;top:0;left:0;pointer-events:auto;border:0!important;background:transparent!important;box-shadow:none!important;color:#e6eee5!important;font:500 15px/1.25 'Nunito','Trebuchet MS',sans-serif!important;padding:7px 10px!important;white-space:nowrap;text-shadow:0 1px 4px #03110b,0 0 12px #03110b;cursor:pointer;transform-origin:center;min-height:32px; }
+.atlas-three-label { position:absolute;top:0;left:0;pointer-events:auto;border:0!important;background:transparent!important;box-shadow:none!important;color:#e6eee5!important;font:500 15px/1.25 var(--font-ui)!important;padding:7px 10px!important;white-space:nowrap;text-shadow:0 1px 4px #03110b,0 0 12px #03110b;cursor:pointer;transform-origin:center;min-height:32px; }
 .atlas-three-label.is-selected { color:#fff4c9!important; }
 .atlas-three-label:focus-visible { outline:2px solid #f0d991;outline-offset:-2px; }
-.atlas-three-label[data-kind='root'] { font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:17px!important; }
-.atlas-three-label[data-kind='luminary'] { font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:16px!important; }
-.atlas-three-realm-label { pointer-events:none;font-family:'Nunito','Trebuchet MS',sans-serif!important;font-size:18px!important; }
+.atlas-three-label[data-kind='root'] { font-family:var(--font-ui)!important;font-size:17px!important; }
+.atlas-three-label[data-kind='luminary'] { font-family:var(--font-ui)!important;font-size:16px!important; }
+.atlas-three-realm-label { pointer-events:none;font-family:var(--font-ui)!important;font-size:18px!important; }
 .atlas-label-gloss { display:block;font-size:11px;font-weight:400;margin-top:3px;color:#bad0c2; }
 .atlas-three-fallback { display:grid;place-items:center;min-height:300px;color:#d5ddcf; }
+.atlas-svg-path,.atlas-path-badges { cursor:pointer;outline:none; }
+.atlas-svg-path:focus-visible .atlas-path-hit { stroke:#e4f6e9;stroke-opacity:.3;stroke-width:10; }
+.atlas-svg-path:hover .atlas-path-hit { stroke:#e4f6e9;stroke-opacity:.15; }
+.atlas-correspondence-glyph { fill:#e5f5df;font:700 17px var(--font-symbol);pointer-events:none; }
+.atlas-extra-label { font-size:20px; }
+.atlas-three-label { z-index:2; }
+.atlas-three-label.atlas-three-symbol { z-index:1;border-radius:50%!important;background:#10291fcc!important;border:1px solid #a5c9bb!important;width:28px;height:28px;min-width:28px;min-height:28px!important;padding:0!important;font-size:16px!important;display:grid;place-items:center; }
+.atlas-three-symbol[data-kind='personal'] { border-color:#ceb3f1!important; }
+.atlas-three-symbol.is-selected { border-color:#fff3c4!important;box-shadow:0 0 12px #c6e5cd55!important; }
 @keyframes atlas-burst { 0% {opacity:0;transform:scale(.2)} 20% {opacity:.95} 100% {opacity:0;transform:scale(1.55)} }
 @keyframes atlas-ray { 0% {opacity:0;stroke-dashoffset:160} 20% {opacity:.8} 100% {opacity:0;stroke-dashoffset:0} }
 @keyframes atlas-spark-fade { 0%,90% {opacity:1} 100% {opacity:0} }

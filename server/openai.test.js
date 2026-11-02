@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeWithOpenAI } from './openai.js';
+import { createDeadline } from './deadline.js';
 
 const text = 'דובר אמר: ״הנהר עלה בשנה שעברה.״';
 const research = {
@@ -206,4 +207,120 @@ test('incomplete and refusal responses are not accepted as successful analyses',
     let calls = 0;
     await assert.rejects(() => analyzeWithOpenAI('Claim', { apiKey: 'test', fetchImpl: async () => ok(++calls === 1 ? research : failure) }), /incomplete result/);
   }
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((yes) => { resolve = yes; });
+  return { promise, resolve };
+}
+
+function controlledDeadline() {
+  let now = 0;
+  let expireTimer;
+  const deadline = createDeadline(100, { now: () => now, setTimer: (callback) => { expireTimer = callback; return 0; }, clearTimer: () => {} });
+  return { deadline, elapse: () => { now = 101; }, expire: () => { now = 101; expireTimer(); } };
+}
+
+test('OpenAI aborts fetch and body waits without starting later analysis stages or exposing raw cancellation reasons', async () => {
+  for (const phase of ['fetch', 'body']) for (const owned of [false, true]) {
+    const started = deferred();
+    const controller = new AbortController();
+    const budget = controlledDeadline();
+    const signal = owned ? budget.deadline.signal : controller.signal;
+    let calls = 0;
+    let requestSignal;
+    const work = analyzeWithOpenAI(text, { apiKey: 'test', signal, ...(owned ? { deadline: budget.deadline } : {}), fetchImpl: async (_url, options) => {
+      calls++;
+      requestSignal = options.signal;
+      assert.equal(Object.hasOwn(JSON.parse(options.body), 'signal'), false);
+      assert.equal(Object.hasOwn(JSON.parse(options.body), 'deadline'), false);
+      if (phase === 'fetch') { started.resolve(); return new Promise(() => {}); }
+      return { ok: true, json: async () => { started.resolve(); return new Promise(() => {}); } };
+    } });
+    await started.promise;
+    const rejected = assert.rejects(work, (error) => error.status === (owned ? 504 : 502) && !error.message.includes('private'));
+    if (owned) budget.expire();
+    else controller.abort(new Error('private cancellation reason'));
+    await rejected;
+    assert.equal(requestSignal.aborted, true);
+    assert.equal(calls, 1);
+    budget.deadline.dispose();
+  }
+});
+
+test('OpenAI checks expired budgets before requests and after research JSON even when the timer cannot run', async () => {
+  for (const phase of ['before', 'body']) {
+    const budget = controlledDeadline();
+    let calls = 0;
+    if (phase === 'before') budget.elapse();
+    await assert.rejects(() => analyzeWithOpenAI(text, { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => {
+      calls++;
+      return { ok: true, json: async () => { budget.elapse(); return research; } };
+    } }), (error) => error.status === 504);
+    assert.equal(calls, phase === 'before' ? 0 : 1);
+    budget.deadline.dispose();
+  }
+  const controller = new AbortController();
+  controller.abort(new Error('private prior cancellation'));
+  await assert.rejects(() => analyzeWithOpenAI(text, { apiKey: 'test', signal: controller.signal, fetchImpl: async () => { assert.fail('Aborted work must not start'); } }), (error) => error.status === 502 && !error.message.includes('private'));
+});
+
+test('OpenAI cancellation settles both concurrent analysis requests under the same parent deadline', async () => {
+  const budget = controlledDeadline();
+  const started = deferred();
+  const active = [];
+  let calls = 0;
+  let bodyStarted = false;
+  const ready = () => { if (calls === 3 && bodyStarted) started.resolve(); };
+  const work = analyzeWithOpenAI(text, { apiKey: 'test', deadline: budget.deadline, signal: budget.deadline.signal, fetchImpl: async (_url, options) => {
+    calls++;
+    if (calls === 1) return ok(research);
+    active.push(options.signal);
+    if (calls === 2) return { ok: true, json: async () => { bodyStarted = true; ready(); return new Promise(() => {}); } };
+    ready();
+    return new Promise(() => {});
+  } });
+  await started.promise;
+  const rejected = assert.rejects(work, (error) => error.status === 504);
+  budget.expire();
+  await rejected;
+  assert.equal(calls, 3);
+  assert.equal(active.length, 2);
+  assert.ok(active.every((signal) => signal.aborted));
+  budget.deadline.dispose();
+});
+
+test('OpenAI checks absolute expiry after structured JSON parsing before parsing or validating later results', async (t) => {
+  const budget = controlledDeadline();
+  const originalParse = JSON.parse;
+  const factual = JSON.stringify(analysis);
+  let parses = 0;
+  t.mock.method(JSON, 'parse', (value, ...options) => {
+    const output = originalParse(value, ...options);
+    parses++;
+    if (value === factual) budget.elapse();
+    return output;
+  });
+  let calls = 0;
+  await assert.rejects(() => analyzeWithOpenAI(text, { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => ok(++calls === 1 ? research : resultResponse(calls === 2 ? analysis : rhetoric)) }), (error) => error.status === 504);
+  assert.equal(calls, 3);
+  assert.equal(parses, 1);
+  budget.deadline.dispose();
+});
+
+test('OpenAI retains the per-request 120-second cap within a longer parent budget', async (t) => {
+  const cap = new AbortController();
+  const timeouts = [];
+  t.mock.method(AbortSignal, 'timeout', (milliseconds) => { timeouts.push(milliseconds); return cap.signal; });
+  const budget = controlledDeadline();
+  const started = deferred();
+  const work = analyzeWithOpenAI(text, { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => { started.resolve(); return new Promise(() => {}); } });
+  await started.promise;
+  const rejected = assert.rejects(work, (error) => error.status === 502);
+  cap.abort(new Error('private request-cap reason'));
+  await rejected;
+  assert.deepEqual(timeouts, [120_000]);
+  assert.equal(budget.deadline.signal.aborted, false);
+  budget.deadline.dispose();
 });

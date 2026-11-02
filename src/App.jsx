@@ -4,6 +4,8 @@ import { languages, languageNames, localeStorageKey, savedLanguage, translate } 
 import { presets } from './presets.js';
 import { buildAnnotations, withFindingLinks } from './annotations.js';
 import { explorerSearch, readExplorerRoute } from './pleroma/state.js';
+import { modelLabel, modelRequestSettings, parseModelConfig, rememberModel, savedModel, selectedModel } from './model-selection.js';
+import { parseSymbolicResponse, rememberSymbolicSetting, savedSymbolicSetting } from './symbolic-settings.js';
 
 const Explorer = lazy(() => import('./pleroma/Explorer.jsx'));
 const navigation = {
@@ -80,7 +82,7 @@ function RhetoricCard({ observation, index, language, analysisLanguage }) {
   </article>;
 }
 
-function Results({ result, isLoading, language }) {
+function Results({ result, isLoading, language, modelConfig }) {
   const claims = result?.claims ?? [];
   const rhetoric = result?.rhetoric ?? [];
   const t = (key, values) => translate(language, key, values);
@@ -90,6 +92,7 @@ function Results({ result, isLoading, language }) {
     {result && <p className="analysis-language">{t('resultLanguage', { language: languageNames[result.analysisLanguage] })}
       {result.analysisLanguage !== language && <> · {t('resultLanguageHint')}</>}
     </p>}
+    {result?.analysisModelId && <p className="analysis-model"><span>{t('resultModel')}: </span><bdi>{modelLabel(result.analysisModelId, modelConfig)}</bdi></p>}
     <div className="results-grid">
       <section className="result-panel claims-panel" aria-labelledby="claims-heading">
         <h2 id="claims-heading">{t('claims')}</h2>
@@ -104,6 +107,18 @@ function Results({ result, isLoading, language }) {
           <p className="empty-state">{t(result ? 'noRhetoric' : 'rhetoricEmpty')}</p>}
       </section>
     </div>
+    {Array.isArray(result?.symbolicReadings) && <section className="symbolic-panel" aria-labelledby="symbolic-heading">
+      <h2 id="symbolic-heading">{t('symbolicReadings')}</h2>
+      <p className="panel-intro">{t('symbolicIntro')}</p>
+      {result.symbolicReadings.length ? result.symbolicReadings.map((reading, index) => <article className="finding symbolic-finding" key={index}>
+        <p className="symbolic-basis">{t(reading.basis === 'tradition' ? 'symbolicTradition' : 'symbolicReflection')}{reading.basis === 'tradition' && reading.tradition && <> · <bdi lang={result.analysisLanguage}>{reading.tradition}</bdi></>}</p>
+        <h3 dir="auto" lang={result.analysisLanguage}>{reading.title}</h3>
+        <blockquote dir="auto">{reading.excerpt}</blockquote>
+        <p dir="auto" lang={result.analysisLanguage}>{reading.reading}</p>
+        <p className="reflection-question" dir="auto" lang={result.analysisLanguage}>{reading.reflectionQuestion}</p>
+        <SourceLinks sources={reading.sources} language={language} />
+      </article>) : <p className="empty-state">{t('noSymbolicReadings')}</p>}
+    </section>}
     {result?.limitations?.length > 0 && <div className="limitations">
       <h3>{t('limitations')}</h3>
       <ul>{result.limitations.map((item, index) => <li key={index} dir="auto" lang={result.analysisLanguage}>{item}</li>)}</ul>
@@ -171,13 +186,20 @@ export default function App() {
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   const [reasoningEffort, setReasoningEffort] = useState('');
-  const [supportsReasoning, setSupportsReasoning] = useState(false);
+  const [modelId, setModelId] = useState(savedModel);
+  const [includeSymbolicReadings, setIncludeSymbolicReadings] = useState(savedSymbolicSetting);
+  const [configuration, setConfiguration] = useState({ status: 'loading', value: null });
+  const [configAttempt, setConfigAttempt] = useState(0);
   const [result, setResult] = useState(null);
   const [view, setView] = useState('edit');
   const [selectedPreset, setSelectedPreset] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const t = (key, values) => translate(language, key, values);
+  const modelConfig = configuration.value;
+  const currentModel = selectedModel(modelConfig, modelId);
+  const supportsReasoning = modelConfig?.kind === 'legacy' ? modelConfig.reasoningControls : currentModel?.available && currentModel.reasoningControls;
+  const canAnalyze = configuration.status === 'ready' && modelRequestSettings(modelConfig, modelId) !== null;
 
   const changeRoute = useCallback((changes, replace = false) => {
     const previous = routeRef.current;
@@ -218,12 +240,25 @@ export default function App() {
   useEffect(() => {
     const controller = new AbortController();
     const endpoint = window.location.pathname.startsWith('/admin/') ? '/admin/api/config' : '/api/config';
-    fetch(endpoint, { signal: controller.signal, headers: { 'Accept-Language': language } })
-      .then((response) => response.ok ? response.json() : null)
-      .then((config) => setSupportsReasoning(config?.reasoningControls === true))
-      .catch(() => {});
+    setConfiguration({ status: 'loading', value: null });
+    async function loadConfiguration() {
+      try {
+        const response = await fetch(endpoint, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Configuration unavailable');
+        const config = parseModelConfig(await response.json());
+        if (controller.signal.aborted) return;
+        setConfiguration({ status: 'ready', value: config });
+        if (config.kind === 'models') setModelId((remembered) => remembered || config.defaultModelId);
+      } catch {
+        if (!controller.signal.aborted) setConfiguration({ status: 'error', value: null });
+      }
+    }
+    loadConfiguration();
     return () => controller.abort();
-  }, [language]);
+  }, [configAttempt]);
+
+  useEffect(() => { if (modelId) rememberModel(modelId); }, [modelId]);
+  useEffect(() => { rememberSymbolicSetting(includeSymbolicReadings); }, [includeSymbolicReadings]);
 
   function clearResult() { setResult(null); setView('edit'); setError(null); }
 
@@ -236,22 +271,29 @@ export default function App() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (isLoading) return;
+    const modelSettings = configuration.status === 'ready' && modelRequestSettings(modelConfig, modelId, reasoningEffort);
+    if (!modelSettings) { setError({ key: configuration.status === 'ready' ? 'modelChooseAvailable' : 'modelConfigError' }); return; }
     const content = (type === 'text' ? text : url).trim();
     if (!content) { setError({ key: type === 'text' ? 'enterText' : 'enterUrl' }); return; }
     clearResult();
     setIsLoading(true);
     const requestLanguage = language;
+    const requestedSymbolicReadings = modelConfig?.symbolicReadings === true && includeSymbolicReadings;
     try {
       const endpoint = window.location.pathname.startsWith('/admin/') ? '/admin/api/analyze' : '/api/analyze';
       const response = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept-Language': requestLanguage },
-        body: JSON.stringify({ type, content, language: requestLanguage, ...(reasoningEffort ? { reasoningEffort } : {}) }),
+        body: JSON.stringify({ type, content, language: requestLanguage, ...modelSettings, ...(requestedSymbolicReadings ? { includeSymbolicReadings: true } : {}) }),
       });
       let data;
       try { data = await response.json(); } catch { throw responseError(translate(requestLanguage, 'unexpected')); }
       if (!response.ok) throw responseError(typeof data?.error === 'string' ? data.error : translate(requestLanguage, 'failed'));
       if (!Array.isArray(data?.claims) || !Array.isArray(data?.rhetoric) || typeof data?.sourceText !== 'string') throw responseError(translate(requestLanguage, 'incomplete'));
-      setResult({ ...data, analysisLanguage: requestLanguage });
+      let validated;
+      try { validated = parseSymbolicResponse(data, requestedSymbolicReadings); }
+      catch { throw responseError(translate(requestLanguage, 'incomplete')); }
+      setResult({ ...validated, analysisLanguage: requestLanguage });
       setView('highlights');
     } catch (err) {
       setError({ message: err?.publicMessage ? err.message : translate(requestLanguage, 'failed'), language: requestLanguage });
@@ -308,17 +350,34 @@ export default function App() {
         <label className="sr-only" htmlFor="analysis-url">{t('urlLabel')}</label>
         <input id="analysis-url" type="url" value={url} dir="ltr" onChange={(event) => { clearResult(); setSelectedPreset(null); setUrl(event.target.value); }} placeholder="https://example.com/article" disabled={isLoading} />
       </>}
-      {supportsReasoning && <div className="reasoning-options">
-        <div className="reasoning-copy"><label htmlFor="reasoning-effort">{t('reasoning')} <span>· <bdi>Grok 4.7</bdi></span></label><p id="reasoning-description">{t('reasoningHint')}</p></div>
-        <select id="reasoning-effort" value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={isLoading} aria-describedby="reasoning-description">
-          <option value="">{t('default')}</option><option value="low">{t('fast')}</option><option value="medium">{t('balanced')}</option><option value="high">{t('deep')}</option>
-        </select>
+      {configuration.status === 'loading' && <p className="model-config-status" role="status">{t('modelConfigLoading')}</p>}
+      {configuration.status === 'error' && <div className="model-config-error" role="alert"><p>{t('modelConfigError')}</p><button type="button" onClick={() => { setError(null); setConfigAttempt((value) => value + 1); }} disabled={isLoading}>{t('retryModelConfig')}</button></div>}
+      {(modelConfig?.kind === 'models' || supportsReasoning) && <div className="analysis-settings">
+        {modelConfig?.kind === 'models' && <div className="model-options">
+          <label htmlFor="analysis-model">{t('model')}</label>
+          <select id="analysis-model" value={currentModel.id} onChange={(event) => { setModelId(event.target.value); setReasoningEffort(''); setError(null); }} disabled={isLoading} aria-invalid={!currentModel.available} aria-describedby="model-description model-availability">
+            {!modelConfig.models.some(({ id }) => id === currentModel.id) && <option value={currentModel.id} disabled>{currentModel.label} — {t('modelNotConfigured')}</option>}
+            {modelConfig.models.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label} · {t(model.access === 'free' ? 'modelFree' : 'modelCredits')}{model.available ? '' : ' — ' + t('modelNotConfigured')}</option>)}
+          </select>
+          <p id="model-description">{t('modelHint')}</p>
+          <p id="model-availability" className={currentModel.available ? 'model-access' : 'model-unavailable'} role={currentModel.available ? undefined : 'alert'}>{currentModel.available ? t(currentModel.access === 'free' ? 'modelFree' : 'modelCredits') : t('modelUnavailable', { model: currentModel.label })}</p>
+        </div>}
+        {supportsReasoning && <div className="reasoning-options">
+          <div className="reasoning-copy"><label htmlFor="reasoning-effort">{t('reasoning')}{currentModel && <span> · <bdi>{currentModel.label}</bdi></span>}</label><p id="reasoning-description">{t('reasoningHint')}</p></div>
+          <select id="reasoning-effort" value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value)} disabled={isLoading} aria-describedby="reasoning-description">
+            <option value="">{t('default')}</option><option value="low">{t('fast')}</option><option value="medium">{t('balanced')}</option><option value="high">{t('deep')}</option>
+          </select>
+        </div>}
       </div>}
-      <div className="form-footer"><p>{t(type === 'text' ? 'textHint' : 'urlHint')}</p><button className="analyze-button" type="submit" disabled={isLoading}>{t(isLoading ? 'analyzing' : 'analyze')}</button></div>
+      {modelConfig?.symbolicReadings && <div className="symbolic-setting">
+        <label><input type="checkbox" checked={includeSymbolicReadings} onChange={(event) => setIncludeSymbolicReadings(event.target.checked)} disabled={isLoading} aria-describedby="symbolic-setting-hint" />{t('exploreSymbolic')}</label>
+        <p id="symbolic-setting-hint">{t('symbolicHint')}</p>
+      </div>}
+      <div className="form-footer"><p>{t(type === 'text' ? 'textHint' : 'urlHint')}</p><button className="analyze-button" type="submit" disabled={isLoading || !canAnalyze}>{t(isLoading ? 'analyzing' : 'analyze')}</button></div>
       {isLoading && <p className="form-message" role="status">{t('loading')}</p>}
       {error && <p className="form-message error" role="alert" dir="auto" lang={error.language || language}>{error.key ? t(error.key) : error.message}</p>}
     </form>
-    <Results result={result} isLoading={isLoading} language={language} />
+    <Results result={result} isLoading={isLoading} language={language} modelConfig={modelConfig} />
     </main>
   </>;
 }

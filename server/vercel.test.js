@@ -44,7 +44,11 @@ test('configured public Vercel API entrypoint serves the configuration route', a
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/config`);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { reasoningControls: false });
+    const config = await response.json();
+    assert.equal(config.reasoningControls, false);
+    assert.equal(config.defaultModelId, 'luna');
+    assert.deepEqual(config.models.map((model) => model.id), ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7']);
+    assert.ok(config.models.every((model) => model.reasoningControls === false));
     assert.equal(response.headers.get('cache-control'), 'no-store');
   } finally {
     await new Promise((resolve) => server.close(resolve));

@@ -150,3 +150,59 @@ test('all source layers have finite focus targets without changing selection ide
     assert.deepEqual(focusFor(scene, 'missing-layer'), focusFor(scene, 'all'));
   }
 });
+
+test('Hermetic facets share twenty-two curved paths and preserve the source nodes', () => {
+  const tree = getTradition('tree'), base = getScene(tree);
+  for (const overlays of [{ tarot: true }, { astrology: true }, { tarot: true, astrology: true }]) {
+    const scene = getScene(tree, overlays);
+    assert.deepEqual(scene.canonical, base.canonical);
+    const paths = scene.edges.filter(({ correspondence }) => correspondence);
+    assert.equal(paths.length, 22);
+    assert.equal(new Set(paths.map(({ id }) => id)).size, 22);
+    assert.equal(scene.associations.length, overlays.astrology ? 10 : 0);
+    assert.equal(scene.edges.length, overlays.astrology ? 32 : 22, 'base scaffolding is replaced, not duplicated');
+    for (const edge of scene.edges) {
+      for (const point of edge.points) finiteVector(point, 2, edge.id);
+      const [a, b, , d] = edge.points;
+      assert.ok(Math.abs((b[0] - a[0]) * (d[1] - a[1]) - (b[1] - a[1]) * (d[0] - a[0])) > .001);
+    }
+    assert.deepEqual(scene, getScene(tree, overlays));
+  }
+  assert.equal(getScene(tree).edges.length, 13);
+  for (const tradition of traditions.filter(({ id }) => id !== 'tree')) assert.deepEqual(getScene(tradition, { tarot: true, astrology: true }), getScene(tradition));
+});
+
+test('personal entity and symbol links add curved geometry without changing canonical identity', () => {
+  const john = getTradition('john'), base = getScene(john);
+  const connections = [
+    { id: 'p-one', from: { kind: 'entity', traditionId: 'john', nodeId: 'barbelo' }, to: { kind: 'entity', traditionId: 'john', nodeId: 'sophia' }, label: 'Reflection', note: '' },
+    { id: 'p-two', from: { kind: 'entity', traditionId: 'john', nodeId: 'barbelo' }, to: { kind: 'symbol', symbolId: 'tarot-star' }, label: 'Starlight', note: '' },
+    { id: 'p-three', from: { kind: 'entity', traditionId: 'tree', nodeId: 'binah' }, to: { kind: 'entity', traditionId: 'john', nodeId: 'barbelo' }, label: 'Understanding', note: '' },
+  ];
+  const scene = getScene(john, {}, connections);
+  assert.deepEqual(scene.canonical, base.canonical);
+  assert.equal(scene.edges.filter(({ personal }) => personal).length, 3);
+  assert.equal(scene.personalMarkers.length, 2);
+  for (const marker of scene.personalMarkers) {
+    finiteVector(marker.position, 2, marker.id);
+    finiteVector(marker.world, 3, marker.id);
+  }
+  assert.equal(getScene(getTradition('tree'), {}, connections).edges.filter(({ personal }) => personal).length, 1);
+});
+
+test('cross-map Truth satellites keep distinct localized labels in the shared renderer scene', () => {
+  const connections = ['truth-faculty', 'truth'].map((nodeId) => ({
+    id: 'personal-' + nodeId, from: { kind: 'entity', traditionId: 'tree', nodeId: 'binah' },
+    to: { kind: 'entity', traditionId: 'john', nodeId }, label: 'A connection with Truth', note: '',
+  }));
+  const scene = getScene(getTradition('tree'), {}, connections);
+  assert.equal(scene.personalMarkers.length, 2);
+  const [faculty, aeon] = scene.personalMarkers;
+  for (const language of ['en', 'he', 'ru']) {
+    assert.ok(faculty.node.label[language] && aeon.node.label[language]);
+    assert.notEqual(faculty.node.label[language], aeon.node.label[language], language);
+  }
+  assert.match(faculty.node.label.en, /Faculty/u);
+  assert.match(aeon.node.label.en, /Aeon.*Armozel/u);
+  assert.deepEqual(scene.edges.filter(({ personal }) => personal).map(({ personal }) => personal.to.nodeId), ['truth-faculty', 'truth']);
+});

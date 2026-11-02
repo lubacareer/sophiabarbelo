@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useRef } from 'react';
+import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { AdditiveBlending, BufferGeometry, CatmullRomCurve3, Color, CubicBezierCurve3, DoubleSide, Float32BufferAttribute, LineBasicMaterial, TextureLoader, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -32,11 +32,15 @@ function Glow({ position = [0, 0, 0], size = 1, strength = .7, color = '#f0cc7c'
   </mesh>;
 }
 
-function Filament({ edge, active = false }) {
+function Filament({ edge, active = false, onSelect }) {
   const curve = useMemo(() => worldCurve(edge), [edge]);
   return <group>
     <mesh raycast={() => null}><tubeGeometry args={[curve, 38, active ? .066 : .04, 5, false]} /><meshBasicMaterial color="#edb84f" transparent opacity={active ? .25 : .13} depthWrite={false} blending={AdditiveBlending} toneMapped={false} /></mesh>
-    <mesh raycast={() => null}><tubeGeometry args={[curve, 38, active ? .014 : .009, 4, false]} /><meshBasicMaterial color={edge.kind === 'interpretive' ? '#badcc9' : '#ffe1a0'} transparent opacity={active ? .98 : .8} depthWrite={false} toneMapped={false} /></mesh>
+    <mesh raycast={() => null}><tubeGeometry args={[curve, 38, active ? .014 : .009, 4, false]} /><meshBasicMaterial color={edge.kind === 'personal' ? '#ceb3f1' : edge.kind === 'interpretive' ? '#badcc9' : '#ffe1a0'} transparent opacity={active ? .98 : .8} depthWrite={false} toneMapped={false} /></mesh>
+    {onSelect && <mesh onClick={(event) => {
+      if (event.delta > 5 || event.intersections.some(({ object }) => object.userData.atlasNode)) return;
+      event.stopPropagation(); onSelect();
+    }}><tubeGeometry args={[curve, 38, .07, 5, false]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} /></mesh>}
   </group>;
 }
 
@@ -127,7 +131,7 @@ function Marker({ marker, active, onSelect }) {
   const sage = marker.aspect === 'feminine' || marker.kind === 'planet' || marker.canonicalParentId === 'invisible-spirit';
   return <group position={marker.world}>
     <Glow size={size * (core ? 18 : active ? 20 : marker.major ? 16 : 13)} strength={core ? .85 : active ? 1.15 : marker.major ? 1.1 : .85} color={sage ? '#dbf1da' : '#ffdc8c'} />
-    <mesh onClick={(event) => { if (event.delta > 5) return; event.stopPropagation(); onSelect(marker.canonicalParentId); }} onPointerOver={(event) => { event.stopPropagation(); document.body.style.cursor = 'pointer'; }} onPointerOut={() => { document.body.style.cursor = ''; }}>
+    <mesh userData={{ atlasNode: true }} onClick={(event) => { if (event.delta > 5) return; event.stopPropagation(); onSelect(marker.canonicalParentId); }} onPointerOver={(event) => { event.stopPropagation(); document.body.style.cursor = 'pointer'; }} onPointerOut={() => { document.body.style.cursor = ''; }}>
       <sphereGeometry args={[size, 24, 16]} />
       <meshStandardMaterial color={sage ? '#d9edce' : '#ffe2a0'} metalness={.35} roughness={.18} emissive={sage ? '#b0e5cf' : '#ffd276'} emissiveIntensity={active || core ? 1.25 : .7} toneMapped={false} />
     </mesh>
@@ -135,7 +139,7 @@ function Marker({ marker, active, onSelect }) {
   </group>;
 }
 
-function Pulse({ selected, edges, eventKey, reducedMotion }) {
+function Pulse({ selected, selectedEdgeId, edges, eventKey, reducedMotion }) {
   const group = useRef(), start = useRef(null);
   const { invalidate, clock } = useThree();
   const material = useMemo(() => new LineBasicMaterial({ color: '#ffe1a1', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }), []);
@@ -161,7 +165,7 @@ function Pulse({ selected, edges, eventKey, reducedMotion }) {
   });
   return <group>
     <group ref={group} position={selected?.world || [0, 0, 0]} visible={false}>{rays.map((geometry, i) => <line key={i} geometry={geometry} material={material} raycast={() => null} />)}</group>
-    {!reducedMotion && edges.filter((edge) => edge.from.id === selected?.id || edge.to.id === selected?.id).slice(0, 7).map((edge) => <Spark key={`${eventKey}-${edge.id}`} edge={edge} />)}
+    {!reducedMotion && edges.filter((edge) => edge.id === selectedEdgeId || edge.from.id === selected?.id || edge.to.id === selected?.id).slice(0, 7).map((edge) => <Spark key={`${eventKey}-${edge.id}`} edge={edge} />)}
   </group>;
 }
 
@@ -179,19 +183,55 @@ function Spark({ edge }) {
   return <mesh ref={mesh} raycast={() => null}><sphereGeometry args={[.035, 8, 6]} /><meshBasicMaterial color="#fff2c4" /></mesh>;
 }
 
-function ProjectLabels({ labels, labelRefs, selectedId }) {
+function ProjectLabels({ labels, labelRefs, selectedId, selectedPathId, selectedPersonalId }) {
   const { size } = useThree();
+  const orderedLabels = useMemo(() => {
+    const extra = (marker) => marker.pathId || marker.personalId;
+    const active = (marker) => Boolean((marker.pathId && marker.pathId === selectedPathId) || (marker.personalId && marker.personalId === selectedPersonalId));
+    return [...labels.filter((marker) => !extra(marker)), ...labels.filter(extra).sort((a, b) => Number(active(b)) - Number(active(a)))];
+  }, [labels, selectedPathId, selectedPersonalId]);
   useFrame(({ camera }) => {
-    for (const marker of labels) {
+    const occupied = [];
+    for (const marker of orderedLabels) {
       const el = labelRefs.current.get(marker.id);
       if (!el) continue;
       const position = new Vector3(...marker.world);
-      position.y += marker.decorative ? 0 : marker.id === 'invisible-spirit' ? .48 : -.29;
+      position.y += marker.decorative || marker.exactPosition ? 0 : marker.id === 'invisible-spirit' ? .48 : -.29;
       position.project(camera);
       const visible = position.z > -1 && position.z < 1 && Math.abs(position.x) < 1.1 && Math.abs(position.y) < 1.1;
       el.style.visibility = visible ? 'visible' : 'hidden';
-      el.style.transform = `translate(-50%, -50%) translate(${(position.x * .5 + .5) * size.width}px, ${(-position.y * .5 + .5) * size.height}px)`;
-      el.classList.toggle('is-selected', marker.canonicalParentId === selectedId);
+      let x = (position.x * .5 + .5) * size.width, y = (-position.y * .5 + .5) * size.height;
+      const halfWidth = el.offsetWidth / 2 + 3, halfHeight = el.offsetHeight / 2 + 3;
+      if (visible && (marker.pathId || marker.personalId)) {
+        // Keep source labels fixed. New badges may move a little in screen space
+        // so overlapping curves remain selectable after zooming or orbiting.
+        const candidates = [[0, 0], ...[24, 44, 66, 88].flatMap((radius) => Array.from({ length: 8 }, (_, index) => {
+          const angle = index * Math.PI / 4;
+          return [Math.cos(angle) * radius, Math.sin(angle) * radius];
+        }))];
+        const canPlace = (dx, dy) => {
+          const left = x + dx - halfWidth, right = x + dx + halfWidth, top = y + dy - halfHeight, bottom = y + dy + halfHeight;
+          return left >= 0 && right <= size.width && top >= 0 && bottom <= size.height
+            && occupied.every((rect) => right < rect.left || left > rect.right || bottom < rect.top || top > rect.bottom);
+        };
+        let offset = candidates.find(([dx, dy]) => canPlace(dx, dy));
+        if (!offset) {
+          // Only search the full canvas when a nearby position is unavailable.
+          // Track the nearest free cell directly; avoid allocating/sorting grids while orbiting.
+          let nearest = Infinity;
+          for (let cx = halfWidth; cx <= size.width - halfWidth; cx += halfWidth * 2 + 2) {
+            for (let cy = halfHeight; cy <= size.height - halfHeight; cy += halfHeight * 2 + 2) {
+              const dx = cx - x, dy = cy - y, distance = dx * dx + dy * dy;
+              if (distance < nearest && canPlace(dx, dy)) { nearest = distance; offset = [dx, dy]; }
+            }
+          }
+        }
+        if (offset) { x += offset[0]; y += offset[1]; }
+        else { el.style.visibility = 'hidden'; continue; }
+      }
+      if (visible && !marker.decorative) occupied.push({ left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight });
+      el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+      el.classList.toggle('is-selected', marker.pathId ? marker.pathId === selectedPathId : marker.personalId ? marker.personalId === selectedPersonalId : marker.canonicalParentId === selectedId);
     }
   });
   return null;
@@ -231,22 +271,28 @@ function ControlsRig({ tradition, scene, zoom, focusLayer, cameraKey, reducedMot
   return null;
 }
 
-function Scene({ scene, tradition, language, selectedId, onSelect, overlays, zoom, focusLayer, reducedMotion, eventKey, cameraKey, cloudUrl, labelRefs, labels }) {
-  const selected = scene.canonical.find((marker) => marker.id === selectedId);
+function Scene({ scene, tradition, language, selectedId, onSelect, selectedPathId, onSelectPath, onSelectAssociation, selectedPersonalId, onSelectPersonal, overlays, zoom, focusLayer, reducedMotion, eventKey, cameraKey, cloudUrl, labelRefs, labels }) {
+  const selectedEdge = scene.edges.find((edge) => edge.id === selectedPathId || edge.personal?.id === selectedPersonalId);
+  const selected = selectedEdge ? { id: selectedEdge.id, world: worldCurve(selectedEdge).getPoint(.5).toArray() } : scene.canonical.find((marker) => marker.id === selectedId);
+  const selectEdge = (edge) => edge.personal ? () => onSelectPersonal?.(edge.personal.id)
+    : edge.association ? () => (onSelectAssociation || onSelectPath)?.(edge.id) : edge.correspondence ? () => onSelectPath?.(edge.id) : undefined;
   return <>
     <ambientLight intensity={1.2} color="#d1dfc9" /><pointLight position={[0, 3, 3]} color="#ffe2a4" intensity={18} distance={20} />
     <ControlsRig {...{ tradition, scene, zoom, focusLayer, cameraKey, reducedMotion }} />
     <group key={tradition.id}>
       <Dust scene={scene} /><LightTrails traditionId={tradition.id} />
       {scene.rings.map((ring) => <Orbit key={ring.id} ring={ring} torus={overlays.torus} onSelect={onSelect} />)}
-      {scene.edges.map((edge) => <Filament key={edge.id} edge={edge} active={edge.from.id === selectedId || edge.to.id === selectedId} />)}
+      {scene.edges.map((edge) => <Filament key={edge.id} edge={edge} active={edge === selectedEdge || edge.from.id === selectedId || edge.to.id === selectedId} onSelect={selectEdge(edge)} />)}
       {scene.cloud && cloudUrl && <Cloud url={cloudUrl} position={scene.cloud.world} />}
-      {scene.markers.map((marker) => <Marker key={marker.id} marker={marker} active={marker.canonicalParentId === selectedId} onSelect={onSelect} />)}
+      {scene.markers.map((marker) => <Marker key={marker.id} marker={marker} active={!selectedEdge && marker.canonicalParentId === selectedId} onSelect={onSelect} />)}
+      {[...scene.associations, ...scene.personalMarkers].map((marker) => <Marker key={marker.id} marker={{ ...marker, canonicalParentId: marker.id }}
+        active={marker.personalId ? marker.personalId === selectedPersonalId : marker.id === selectedPathId}
+        onSelect={() => marker.personalId ? onSelectPersonal?.(marker.personalId) : (onSelectAssociation || onSelectPath)?.(marker.id)} />)}
       <Glow position={tradition.id === 'tree' ? [0, 3.1, -.3] : [0, .05, 0]} size={tradition.id === 'tree' ? 10 : 12} strength={.26} color="#ae8f4d" />
       {scene.cloud && <Glow position={scene.cloud.world} size={4.2} strength={.3} color="#e5daa3" />}
-      <Pulse selected={selected} edges={scene.edges} eventKey={eventKey} reducedMotion={reducedMotion} />
+      <Pulse selected={selected} selectedEdgeId={selectedEdge?.id} edges={scene.edges} eventKey={eventKey} reducedMotion={reducedMotion} />
     </group>
-    <ProjectLabels labels={labels} labelRefs={labelRefs} selectedId={selectedId} language={language} />
+    <ProjectLabels labels={labels} labelRefs={labelRefs} selectedId={selectedId} selectedPathId={selectedPathId} selectedPersonalId={selectedPersonalId} language={language} />
   </>;
 }
 
@@ -257,13 +303,25 @@ class RenderBoundary extends Component {
   render() { return this.state.failed ? <div className="atlas-three-fallback" role="status">{this.props.fallbackText}</div> : this.props.children; }
 }
 
-export default function Atlas3D({ tradition, language = 'en', selectedId, onSelect, overlays = {}, zoom = 1, focusLayer = 'all', reducedMotion = false, eventKey = 0, cameraKey = 0, cloudUrl, onFailure }) {
-  const scene = useMemo(() => getScene(tradition, overlays), [tradition, overlays.paired, overlays.planets, overlays.torus]);
+export default function Atlas3D({ tradition, language = 'en', selectedId, onSelect, selectedPathId, onSelectPath, onSelectAssociation, personalConnections = [], selectedPersonalId, onSelectPersonal, overlays = {}, zoom = 1, focusLayer = 'all', reducedMotion = false, eventKey = 0, cameraKey = 0, cloudUrl, onFailure }) {
+  const [compactLabels, setCompactLabels] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 760px)');
+    const change = () => setCompactLabels(media.matches);
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  const scene = useMemo(() => getScene(tradition, overlays, personalConnections), [tradition, overlays.paired, overlays.planets, overlays.torus, overlays.tarot, overlays.astrology, personalConnections]);
   const labelRefs = useRef(new Map());
   const labels = useMemo(() => [
     ...scene.canonical.filter((m) => m.major || m.id === selectedId),
+    ...scene.edges.filter((edge) => edge.correspondence && (!compactLabels || edge.id === selectedPathId)).map((edge) => ({ id: `label-${edge.id}`, pathId: edge.id, kind: 'correspondence', exactPosition: true,
+      world: worldCurve(edge).getPoint(.5).toArray(), glyph: overlays.astrology ? edge.correspondence.astrology.glyph : edge.correspondence.order,
+      node: { label: Object.fromEntries(['en', 'he', 'ru'].map((locale) => [locale, [overlays.tarot && textFor(edge.correspondence.label, locale), overlays.astrology && textFor(edge.correspondence.astrology.label, locale)].filter(Boolean).join(' · ')])) } })),
+    ...scene.associations.filter((marker) => !compactLabels || marker.id === selectedPathId).map((marker) => ({ ...marker, pathId: marker.id, exactPosition: true })),
+    ...scene.personalMarkers.filter((marker) => !compactLabels || marker.personalId === selectedPersonalId).map((marker) => ({ ...marker, exactPosition: true })),
     ...(tradition.id === 'john' ? [{ id: 'realm-seven-heavens', canonicalParentId: null, decorative: true, kind: 'realm', world: [0, 4.4, -4.0], node: { label: { en: 'Seven heavens', he: 'שבעה רקיעים', ru: 'Семь небес' } } }] : []),
-  ], [scene, selectedId, tradition.id]);
+  ], [scene, selectedId, selectedPathId, selectedPersonalId, compactLabels, tradition.id, overlays.tarot, overlays.astrology]);
   const fallbackText = textFor({ en: 'Opening the accessible 2D map…', he: 'פותחים את המפה הדו־ממדית הנגישה…', ru: 'Открывается доступная двумерная карта…' }, language);
   const cleanup = useRef(null);
   useEffect(() => () => cleanup.current?.(), []);
@@ -283,14 +341,17 @@ export default function Atlas3D({ tradition, language = 'en', selectedId, onSele
           canvas.addEventListener('webglcontextlost', lost);
           cleanup.current = () => canvas.removeEventListener('webglcontextlost', lost);
         }}>
-        <Scene {...{ scene, tradition, language, selectedId, onSelect, overlays, zoom, focusLayer, reducedMotion, eventKey, cameraKey, cloudUrl, labelRefs, labels }} />
+        <Scene {...{ scene, tradition, language, selectedId, onSelect, selectedPathId, onSelectPath, onSelectAssociation, selectedPersonalId, onSelectPersonal, overlays, zoom, focusLayer, reducedMotion, eventKey, cameraKey, cloudUrl, labelRefs, labels }} />
       </Canvas>
       <div className="atlas-three-labels">{labels.map((marker) => {
         const label = textFor(marker.node.label, language);
         const [name, meaning] = marker.kind === 'sefirah' ? label.split(/\s+·\s+/u) : [label];
-        const content = meaning ? <>{name}<span className="atlas-label-gloss">{meaning}</span></> : label;
-        const attributes = { ref: (element) => { if (element) labelRefs.current.set(marker.id, element); else labelRefs.current.delete(marker.id); }, className: `atlas-three-label${marker.decorative ? ' atlas-three-realm-label' : ''}${marker.id === selectedId ? ' is-selected' : ''}`, 'data-kind': marker.kind, dir: language === 'he' ? 'rtl' : 'ltr' };
-        return marker.decorative ? <span key={marker.id} {...attributes} aria-hidden="true">{content}</span> : <button key={marker.id} type="button" {...attributes} data-node-id={marker.id} onClick={() => onSelect(marker.id)} aria-pressed={marker.id === selectedId}>{content}</button>;
+        const content = marker.glyph || (meaning ? <>{name}<span className="atlas-label-gloss">{meaning}</span></> : label);
+        const active = marker.pathId ? marker.pathId === selectedPathId : marker.personalId ? marker.personalId === selectedPersonalId : marker.id === selectedId;
+        const attributes = { ref: (element) => { if (element) labelRefs.current.set(marker.id, element); else labelRefs.current.delete(marker.id); }, className: `atlas-three-label${marker.decorative ? ' atlas-three-realm-label' : ''}${marker.pathId || marker.personalId ? ' atlas-three-symbol' : ''}${active ? ' is-selected' : ''}`, 'data-kind': marker.kind, dir: language === 'he' ? 'rtl' : 'ltr' };
+        return marker.decorative ? <span key={marker.id} {...attributes} aria-hidden="true">{content}</span> : <button key={marker.id} type="button" {...attributes} aria-label={label} title={label}
+          data-node-id={marker.pathId || marker.personalId ? undefined : marker.id} data-path-id={marker.pathId} data-personal-id={marker.personalId}
+          onClick={() => marker.personalId ? onSelectPersonal?.(marker.personalId) : marker.pathId ? (marker.kind === 'association' ? onSelectAssociation || onSelectPath : onSelectPath)?.(marker.pathId) : onSelect(marker.id)} aria-pressed={active}>{content}</button>;
       })}</div>
     </div>
   </RenderBoundary>;

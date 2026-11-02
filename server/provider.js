@@ -2,64 +2,40 @@ import { AppError } from './errors.js';
 import { analyzeWithGrok } from './grok.js';
 import { analyzeWithGroq } from './groq.js';
 import { analyzeWithOpenAI } from './openai.js';
-import { localize } from './localization.js';
+import { analyzeWithGemini } from './gemini.js';
+import { analyzeWithCloudflare } from './cloudflare.js';
+import { resolveAnalysisModel } from './models.js';
 
-const freeModel = 'openai/gpt-oss-120b';
+export { analysisConfiguration, resolveAnalysisModel, supportsReasoning } from './models.js';
 
-function deploymentRole() {
-  if (!process.env.VERCEL) return 'local';
-  const role = process.env.SOPHIA_DEPLOYMENT_ROLE;
-  if (!['public', 'admin'].includes(role)) throw new AppError(503, 'Analysis is unavailable: the deployment role is not configured.');
-  return role;
-}
-
-export function supportsReasoning() {
-  const role = deploymentRole();
-  if (role === 'public') return false;
-  if (role === 'admin') return true;
-  return (process.env.ANALYSIS_PROVIDER || 'xai').toLowerCase() === 'xai'
-    && (process.env.XAI_MODEL || 'grok-4.7') === 'grok-4.7';
-}
-
-async function freeResearch(text, groq, options) {
-  if (process.env.SOPHIA_GROQ_FREE_CONFIRMED !== 'true') {
-    throw new AppError(503, 'Free web research is not configured. Please try again later.');
-  }
-  return groq(text, { ...(options.language !== undefined ? { language: options.language } : {}), model: freeModel, requireCitations: true, maxRetryWaitSeconds: 30 });
-}
-
-export async function analyzeConfigured(text, options = {}, { grok = analyzeWithGrok, groq = analyzeWithGroq, openai = analyzeWithOpenAI } = {}) {
-  const role = deploymentRole();
-  if (role === 'public') {
-    if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only.');
-    const publicProvider = (process.env.SOPHIA_PUBLIC_PROVIDER || 'groq').toLowerCase();
-    if (publicProvider === 'groq') return freeResearch(text, groq, options);
-    if (publicProvider === 'openai') {
-      if (process.env.SOPHIA_OPENAI_COSTS_CONFIRMED !== 'true') {
-        throw new AppError(503, 'Analysis is unavailable: OpenAI usage costs are not configured.');
-      }
-      return openai(text, { ...(options.language !== undefined ? { language: options.language } : {}), model: 'gpt-6-luna', requireCitations: true });
+export async function analyzeConfigured(text, options = {}, {
+  deployment = 'local', environment = process.env,
+  grok = analyzeWithGrok, groq = analyzeWithGroq, openai = analyzeWithOpenAI,
+  gemini = analyzeWithGemini, cloudflare = analyzeWithCloudflare,
+} = {}) {
+  const selected = resolveAnalysisModel(options, { deployment, environment });
+  if (selected) {
+    const adapter = { xai: grok, openai, gemini, cloudflare }[selected.provider];
+    const providerOptions = {
+      ...(options.language !== undefined ? { language: options.language } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+      ...(options.deadline !== undefined ? { deadline: options.deadline } : {}),
+      ...(options.includeSymbolicReadings !== undefined ? { includeSymbolicReadings: options.includeSymbolicReadings } : {}),
+      model: selected.model,
+      ...(selected.provider !== 'xai' ? { requireCitations: true } : {}),
+    };
+    if (selected.provider === 'xai') {
+      if (deployment === 'public') providerOptions.reasoningEffort = 'low';
+      else if (options.reasoningEffort !== undefined) providerOptions.reasoningEffort = options.reasoningEffort;
     }
-    throw new AppError(503, 'Analysis is unavailable: the public provider is not configured.');
+    const result = await adapter(text, providerOptions);
+    return { ...result, analysisModelId: selected.id };
   }
-  if (role === 'admin') {
-    try { return await grok(text, { ...options, model: 'grok-4.7' }); }
-    catch (error) {
-      if (!error?.providerRateLimited) throw error;
-      const result = await freeResearch(text, groq, options);
-      result.limitations.push(localize('Grok reached its usage limit, so a free research model was used.', options.language));
-      return result;
-    }
-  }
-  const provider = (process.env.ANALYSIS_PROVIDER || 'xai').toLowerCase();
+  // Caddy administrator identity affects quota exemption, while local provider
+  // and model selection keep using the existing server environment.
+  const provider = (environment.ANALYSIS_PROVIDER || 'xai').toLowerCase();
   if (provider === 'xai') return grok(text, options);
-  if (provider === 'groq') {
-    if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only. Select Default for Groq.');
-    return groq(text, options);
-  }
-  if (provider === 'openai') {
-    if (options.reasoningEffort) throw new AppError(400, 'Reasoning settings are available for Grok only.');
-    return openai(text, options);
-  }
+  if (provider === 'groq') return groq(text, options);
+  if (provider === 'openai') return openai(text, options);
   throw new AppError(503, 'Analysis is unavailable: configure ANALYSIS_PROVIDER as groq, openai, or xai.');
 }

@@ -6,6 +6,7 @@ import ipaddr from 'ipaddr.js';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import { AppError } from './errors.js';
+import { awaitWithSignal, checkDeadline } from './deadline.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT = 30_000;
@@ -46,7 +47,8 @@ export function parsePublicUrl(value) {
   return url;
 }
 
-export async function resolvePublic(hostname, lookup = dns.lookup) {
+export async function resolvePublic(hostname, lookup = dns.lookup, { deadline, signal = deadline?.signal } = {}) {
+  checkDeadline(deadline, signal);
   const host = hostname.replace(/^\[|\]$/g, '');
   if (net.isIP(host)) {
     if (!isPublicAddress(host)) throw new AppError(400, 'The URL must point to a public website.');
@@ -54,25 +56,58 @@ export async function resolvePublic(hostname, lookup = dns.lookup) {
   }
   let timer;
   try {
-    const answers = await Promise.race([
+    const pending = Promise.race([
       lookup(host, { all: true, verbatim: true }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('DNS timeout')), TIMEOUT); }),
     ]);
+    const answers = await awaitWithSignal(pending, signal);
+    checkDeadline(deadline, signal);
     if (!answers.length || answers.some(({ address }) => !isPublicAddress(address))) {
       throw new AppError(400, 'The URL must point to a public website.');
     }
     return answers;
   } catch (error) {
+    checkDeadline(deadline, signal);
     if (error instanceof AppError) throw error;
     throw new AppError(422, 'The website address could not be resolved.');
   } finally { clearTimeout(timer); }
 }
 
-function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['text/html', 'application/xhtml+xml', 'text/plain'] } = {}) {
+function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['text/html', 'application/xhtml+xml', 'text/plain'], deadline, signal = deadline?.signal } = {}) {
   return new Promise((resolve, reject) => {
+    checkDeadline(deadline, signal);
     const transport = url.protocol === 'https:' ? https : http;
     let timer;
     let responseReceived = false;
+    let response;
+    let settled = false;
+    let failure;
+    let earlyResult;
+    function cancellationError() {
+      try { checkDeadline(deadline, signal); } catch (error) { return error; }
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+    }
+    function finish(error, result) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const reason = cancellationError() || error;
+      if (reason) reject(reason);
+      else resolve(result);
+    }
+    function stop(error, result) {
+      if (settled) return;
+      failure ||= error;
+      if (result) earlyResult = result;
+      // Wait for the request's close event before exposing cancellation or an
+      // early response. A redirect/error body must not keep streaming behind it.
+      response?.destroy();
+      req.destroy();
+    }
+    function abort() { stop(cancellationError() || signal.reason); }
     const req = transport.request(url, {
       method,
       headers: {
@@ -91,50 +126,70 @@ function requestPinned(url, address, { method = 'GET', body, acceptedTypes = ['t
       timeout: TIMEOUT,
     }, (res) => {
       responseReceived = true;
+      response = res;
+      res.on('error', () => {
+        if (!failure && !earlyResult) stop(new AppError(422, 'The article could not be read.'));
+      });
+      const cancelled = cancellationError();
+      if (cancelled) { stop(cancelled); return; }
       const status = res.statusCode || 0;
       if ([301, 302, 303, 307, 308].includes(status)) {
-        res.resume();
-        return resolve({ redirect: res.headers.location });
+        stop(undefined, { redirect: res.headers.location }); return;
       }
-      if (status < 200 || status >= 300) { res.resume(); return reject(new AppError(422, 'The article could not be accessed. Try pasting its text instead.')); }
+      if (status < 200 || status >= 300) { stop(new AppError(422, 'The article could not be accessed. Try pasting its text instead.')); return; }
       const type = (res.headers['content-type'] || '').toLowerCase();
       if (!acceptedTypes.some((accepted) => type.split(';', 1)[0].trim() === accepted)) {
-        res.resume(); return reject(new AppError(422, 'The URL must point to an HTML or plain-text article.'));
+        stop(new AppError(422, 'The URL must point to an HTML or plain-text article.')); return;
       }
       if (res.headers['content-encoding'] && res.headers['content-encoding'] !== 'identity') {
-        res.resume(); return reject(new AppError(422, 'The website returned an unsupported response. Try pasting its text instead.'));
+        stop(new AppError(422, 'The website returned an unsupported response. Try pasting its text instead.')); return;
       }
       if (Number(res.headers['content-length']) > MAX_BYTES) {
-        res.resume(); return reject(new AppError(422, 'The article is too large to process.'));
+        stop(new AppError(422, 'The article is too large to process.')); return;
       }
       let size = 0;
       const chunks = [];
       res.on('data', (chunk) => {
+        const cancelled = cancellationError();
+        if (cancelled) { stop(cancelled); return; }
         size += chunk.length;
-        if (size > MAX_BYTES) { res.destroy(); reject(new AppError(422, 'The article is too large to process.')); }
+        if (size > MAX_BYTES) stop(new AppError(422, 'The article is too large to process.'));
         else chunks.push(chunk);
       });
-      res.on('end', () => resolve({ body: Buffer.concat(chunks).toString('utf8'), type }));
-      res.on('error', () => reject(new AppError(422, 'The article could not be read.')));
+      res.on('end', () => finish(failure, { body: Buffer.concat(chunks).toString('utf8'), type }));
     });
-    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+    const timeoutError = () => responseReceived ? new AppError(422, 'The article could not be accessed. Try pasting its text instead.') : new ArticleConnectionError();
+    req.on('timeout', () => stop(cancellationError() || timeoutError()));
     req.on('error', (error) => {
-      if (!responseReceived && RETRYABLE_CONNECTION_CODES.has(error.code)) return reject(new ArticleConnectionError());
-      return reject(new AppError(422, 'The article could not be accessed. Try pasting its text instead.'));
+      if (failure || earlyResult) return;
+      failure = cancellationError() || (!responseReceived && RETRYABLE_CONNECTION_CODES.has(error.code) ? new ArticleConnectionError() : new AppError(422, 'The article could not be accessed. Try pasting its text instead.'));
     });
     // Socket idle timeouts alone can be defeated by a slow response. Bound the
     // complete response even if the remote peer keeps sending small chunks.
-    timer = setTimeout(() => req.destroy(Object.assign(new Error('deadline exceeded'), { code: 'ETIMEDOUT' })), TIMEOUT);
-    req.on('close', () => clearTimeout(timer));
+    timer = setTimeout(() => stop(cancellationError() || timeoutError()), Math.max(1, Math.min(TIMEOUT, deadline?.remainingMs() ?? TIMEOUT)));
+    req.on('close', () => {
+      finish(failure || (!earlyResult && new AppError(422, 'The article could not be accessed. Try pasting its text instead.')), earlyResult);
+      cleanup();
+    });
+    signal?.addEventListener('abort', abort, { once: true });
+    const cancelled = cancellationError();
+    if (cancelled) { stop(cancelled); return; }
     req.end(body);
   });
 }
 
 async function requestWithFallback(url, addresses, request, options) {
+  const { signal, deadline } = options || {};
   let lastError;
   for (const address of addresses.slice(0, MAX_ADDRESSES)) {
-    try { return await request(url, address, options); }
+    checkDeadline(deadline, signal);
+    try {
+      const response = await request(url, address, options);
+      checkDeadline(deadline, signal);
+      return response;
+    }
     catch (error) {
+      checkDeadline(deadline, signal);
       if (!(error instanceof ArticleConnectionError)) throw error;
       lastError = error;
     }
@@ -142,15 +197,32 @@ async function requestWithFallback(url, addresses, request, options) {
   throw lastError || new AppError(422, 'The article could not be accessed. Try pasting its text instead.');
 }
 
+async function resolveAddresses(hostname, resolve, options) {
+  const { signal, deadline } = options || {};
+  checkDeadline(deadline, signal);
+  const pending = resolve === resolvePublic ? resolve(hostname, undefined, options) : resolve(hostname, options);
+  try {
+    const addresses = await awaitWithSignal(pending, signal);
+    checkDeadline(deadline, signal);
+    return addresses;
+  } catch (error) {
+    checkDeadline(deadline, signal);
+    throw error;
+  }
+}
+
 // Breaking The News serves an empty HTML shell and loads the full article from
 // its own JSON endpoint. Restrict the adapter to article IDs and the same host.
-async function extractBreakingNews(url, resolve, request) {
+async function extractBreakingNews(url, resolve, request, options) {
+  const { signal, deadline } = options || {};
+  checkDeadline(deadline, signal);
   if (!['breakingthenews.net', 'www.breakingthenews.net'].includes(url.hostname.toLowerCase())) return '';
   const match = url.pathname.match(/^\/Article\/[^/]+\/(\d+)\/?$/i);
   if (!match) return '';
   const apiUrl = parsePublicUrl(new URL('/api/article', url).href);
-  const addresses = await resolve(apiUrl.hostname);
+  const addresses = await resolveAddresses(apiUrl.hostname, resolve, options);
   const response = await requestWithFallback(apiUrl, addresses, request, {
+    ...options,
     method: 'POST', body: JSON.stringify({ NewsID: match[1] }), acceptedTypes: ['application/json'],
   });
   // Do not forward the POST body to a redirect destination.
@@ -158,21 +230,28 @@ async function extractBreakingNews(url, resolve, request) {
   let article;
   try { article = JSON.parse(response.body)?.NewsArticle; } catch { return ''; }
   if (String(article?.['@id']) !== match[1] || typeof article?.Article?.['#cdata-section'] !== 'string') return '';
+  checkDeadline(deadline, signal);
   const dom = new JSDOM(article.Article['#cdata-section']);
-  dom.window.document.querySelectorAll('script, style, noscript').forEach((element) => element.remove());
-  dom.window.document.querySelectorAll('p, div, li, br, h1, h2, h3, h4, h5, h6').forEach((element) => {
-    element.after(dom.window.document.createTextNode(' '));
-  });
-  const text = dom.window.document.body.textContent || '';
-  dom.window.close();
-  return text;
+  try {
+    checkDeadline(deadline, signal);
+    dom.window.document.querySelectorAll('script, style, noscript').forEach((element) => element.remove());
+    dom.window.document.querySelectorAll('p, div, li, br, h1, h2, h3, h4, h5, h6').forEach((element) => {
+      element.after(dom.window.document.createTextNode(' '));
+    });
+    const text = dom.window.document.body.textContent || '';
+    checkDeadline(deadline, signal);
+    return text;
+  } finally { dom.window.close(); }
 }
 
-export async function extractArticle(value, { resolve = resolvePublic, request = requestPinned } = {}) {
+export async function extractArticle(value, { resolve = resolvePublic, request = requestPinned, deadline, signal = deadline?.signal } = {}) {
+  const options = signal || deadline ? { ...(signal ? { signal } : {}), ...(deadline ? { deadline } : {}) } : undefined;
+  checkDeadline(deadline, signal);
   let url = parsePublicUrl(value);
   for (let redirects = 0; redirects <= 3; redirects++) {
-    const addresses = await resolve(url.hostname);
-    const response = await requestWithFallback(url, addresses, request);
+    checkDeadline(deadline, signal);
+    const addresses = await resolveAddresses(url.hostname, resolve, options);
+    const response = await requestWithFallback(url, addresses, request, options);
     if ('redirect' in response) {
       if (!response.redirect || redirects === 3) throw new AppError(422, 'The website redirected too many times or to an invalid address.');
       try { url = parsePublicUrl(new URL(response.redirect, url).href); }
@@ -182,15 +261,20 @@ export async function extractArticle(value, { resolve = resolvePublic, request =
     let text;
     if (response.type.startsWith('text/plain')) text = response.body;
     else {
+      checkDeadline(deadline, signal);
       const dom = new JSDOM(response.body, { url: url.href });
-      const article = new Readability(dom.window.document).parse();
-      text = article?.textContent || '';
-      dom.window.close();
+      try {
+        checkDeadline(deadline, signal);
+        const article = new Readability(dom.window.document).parse();
+        text = article?.textContent || '';
+        checkDeadline(deadline, signal);
+      } finally { dom.window.close(); }
       if (text.replace(/\s+/g, ' ').trim().length < 40) {
-        text = await extractBreakingNews(url, resolve, request);
+        text = await extractBreakingNews(url, resolve, request, options);
       }
     }
     text = text.replace(/\s+/g, ' ').trim();
+    checkDeadline(deadline, signal);
     if (text.length < 40) throw new AppError(422, 'No readable article text was found. Try pasting the text instead.');
     if (text.length > MAX_TEXT) throw new AppError(422, `The article is too long. Please paste up to ${MAX_TEXT.toLocaleString()} characters.`);
     return text;

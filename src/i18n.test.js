@@ -22,3 +22,16 @@ test('locale persistence accepts only supported locales and tolerates disabled s
   for (const value of [null, '', 'fr', 'HE', '<script>']) assert.equal(savedLanguage({ getItem: () => value }), 'en');
   assert.equal(savedLanguage({ getItem: () => { throw new Error('Storage disabled'); } }), 'en');
 });
+
+test('model configuration, availability, and result attribution copy is localized without changing model names', () => {
+  const model = 'GLM-4.7-Flash';
+  for (const language of languages) {
+    for (const key of ['model', 'modelHint', 'modelCredits', 'modelFree', 'modelNotConfigured', 'modelChooseAvailable', 'modelConfigLoading', 'modelConfigError', 'retryModelConfig', 'resultModel']) {
+      assert.notEqual(translate(language, key), key, `${language}: ${key} must resolve to interface copy`);
+    }
+    assert.ok(translate(language, 'modelUnavailable', { model }).includes(model));
+    assert.ok(!translate(language, 'modelUnavailable', { model }).includes('{model}'));
+  }
+  assert.match(translate('he', 'modelConfigError'), /\p{Script=Hebrew}/u);
+  assert.match(translate('ru', 'modelChooseAvailable'), /\p{Script=Cyrillic}/u);
+});

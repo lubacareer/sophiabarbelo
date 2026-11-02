@@ -1,7 +1,89 @@
 # Pleroma 3D validation
 
-Validated locally on 2026-11-01. No live analysis providers, credentials, database
-resources, deployment settings, or billing were changed for this feature.
+## Hebrew and Russian font update — 2026-11-02
+
+Fredoka now renders Hebrew and M PLUS Rounded 1c renders Russian/Cyrillic across
+the analyzer, explorer, source inspector, personal editor, and SVG/WebGL labels.
+Nunito remains the Latin font. Script-specific local WOFF2 files total 77,584
+bytes; the supplied original files and archives remain untouched. Licenses,
+coverage, and derivation details are in [font notes](../src/fonts/README.md).
+
+- Twelve public/admin × 1280/390/320px × Hebrew/Russian browser cases passed.
+  Chrome's rendered-font inspection confirmed the intended embedded fonts in
+  192 samples, including controls, results, both diagram modes, and mixed notes.
+- English-interface checks on both roles confirmed Hebrew source passages still
+  use Fredoka and mixed personal notes use Fredoka, M PLUS Rounded, and Nunito
+  according to their script. Unsupported biblical marks retain system fallback;
+  no source characters were altered.
+- Language switches, reloads, keyboard focus, real overlay-menu clicks, and
+  responsive wrapping passed without horizontal overflow or page errors.
+  Browser skill was unavailable; installed Playwright/Chrome used local fixtures
+  at ports 6181/6182. Twelve fixture analyses made no live provider calls, and no
+  external font requests occurred. Refreshed Hebrew/Russian screenshots below
+  show the new fonts.
+- Local tests: 238 passed, eight Redis cases skipped; production build and
+  `git diff --check` passed. The existing lazy 3D bundle warning remains.
+
+## Symbolic exploration revision — 2026-11-02
+
+The current screenshots show bright grass-green controls and translucent mint
+panels over the analyzer's generated background. The canvas remains #081713,
+with its gold filaments, cloud, lighting, and existing source quotations intact.
+
+- Added 22 selectable Hermetic paths (11–32), ten celestial associations, and
+  32 source records from the original 777 (1909) tables. Tarot and Astrology
+  share paths; disabling both restores the original thirteen Tree connectors.
+  Canonical source records, entity IDs, labels, and source relationships were
+  compared with the pre-feature catalog and are unchanged.
+- Final SVG matrix: public/admin × 1280/390/320px × English/Hebrew/Russian,
+  with all 576 path/association marker-center clicks passing. WebGL passed
+  the same 18 configurations and 32 selections per case. Compact 3D uses List
+  plus the selected badge for dense selections; zoom/orbit also remain available.
+- All four traditions passed in both modes on both roles. Checks included
+  keyboard selection, focus restoration, node/path pointer priority, source
+  inspection, zoom/Fit, layers, validated deep links, browser history, retained
+  analyzer anchors, reduced motion, and WebGL initialization/context-loss fallback.
+- Personal connections passed add/edit/delete, draft retention while hidden,
+  export/import, duplicate and invalid-file handling, cross-map navigation,
+  per-origin isolation, plain-text rendering, and blocked-storage retention
+  through analyzer/explorer remounts. Notes never entered URLs or API requests.
+- Final pointer checks fixed the overlay menu's stacking above the canvas and
+  its mobile anchoring. Both checkboxes are clickable at 1280/390/320px and in
+  Hebrew RTL/Russian mobile layouts. Disabling an overlay preserves a selected
+  personal connection; explicit source selections and Back/Forward clear it.
+  The additional 16 checks reported no page errors or analysis requests.
+- Analyzer fixtures covered the unchecked symbolic default, opt-in response,
+  one analysis request, retained results after setting/model changes, malformed
+  responses, and older configuration compatibility. Public/admin layouts and
+  Grok depth visibility passed all 18 locale/viewport combinations.
+- Initial analyzer loading did not request the explorer or 3D bundle. Explorer
+  interactions sent no analysis requests. Browser checks reported no page
+  errors or horizontal overflow. No live model calls were used.
+- Contrast calculations: forest text on the lime primary control is 7.99:1;
+  body text and headings on the 78%-opaque inspector glass over a black
+  background are 5.24:1 and 6.04:1. Keyboard focus remains visible on glass and
+  against the dark canvas. Mobile Hebrew/Russian headings wrap without clipping.
+- Final local suite: 238 passed, eight opt-in Redis integration cases skipped
+  because a local Redis container was unavailable. Production build and
+  `git diff --check` passed. CI supplies Redis 7.4 for the real integration cases.
+  Relative documentation links resolve. The lazy 3D chunk retains Vite's
+  existing large-chunk warning (about 958 kB minified / 254 kB gzip).
+
+Screenshots: [desktop 3D](images/pleroma-desktop.png),
+[Hebrew mobile 2D](images/pleroma-mobile.png),
+[Russian 320px](images/pleroma-mobile-ru.png),
+[symbolic analysis fixture](images/symbolic-analysis.png), and
+[personal editor](images/personal-connections.png).
+
+See [implementation and API notes](symbolic-exploration.md) and
+[source provenance](pleroma-sources.md#hermetic-correspondences--777-1909).
+
+## Original explorer and subsequent PR #6 checks — 2026-11-01
+
+The following records describe the earlier revision. Its mint palette and
+screenshots were superseded by the bright glass revision above. No live analysis
+providers, credentials, database resources, deployment settings, or billing were
+changed for that feature.
 
 ## Automated checks
 
@@ -60,7 +142,7 @@ the canvas and scene treatment. The refreshed screenshots are in `docs/images`.
 | Motion | One finite selection/change burst and traveling sparks; static resting illumination, no automatic rotation, reduced-motion support. |
 
 Intentional differences: the default selection is Barbelo with overlays off;
-the mobile screenshot demonstrates the optional paired view. Source data follow
+the earlier mobile screenshot demonstrated the optional paired view. Source data follow
 the approved witnesses rather than decorative labels in the concept. Mint UI
 and Nunito supersede the original concept's dark/gold controls and serif type.
 Full provenance, restoration notices, the layer row, overlay options, and accessible

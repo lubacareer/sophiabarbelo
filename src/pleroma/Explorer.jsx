@@ -4,6 +4,9 @@ import { t } from './messages.js';
 import Atlas2D from './Atlas2D.jsx';
 import cloudUrl from './assets/sophia-cloud.png';
 import './explorer.css';
+import { celestialAssociations, correspondenceLabel, correspondencePaths, correspondenceSources, getCorrespondence } from './correspondences.js';
+import { loadPersonalConnections, savePersonalConnections, personalEndpointLabel } from './personal.js';
+import PersonalConnections from './PersonalConnections.jsx';
 
 const Atlas3D = lazy(() => import('./Atlas3D.jsx'));
 
@@ -52,20 +55,20 @@ function safeUrl(value) {
   } catch { return undefined; }
 }
 
-function SourceInspector({ node, tradition, language, onClose, tab, setTab, headingRef, paired }) {
+function SourceInspector({ node, tradition, language, onClose, tab, setTab, headingRef, paired, overlays }) {
   const [expanded, setExpanded] = useState(false);
   const [sourceIndex, setSourceIndex] = useState(0);
   useEffect(() => { setExpanded(false); setSourceIndex(0); }, [node.id, tradition.id]);
-  const records = node.sourceIds.map((id) => sources[id]).filter(Boolean);
+  const records = node.sourceIds.map((id) => sources[id] || correspondenceSources[id]).filter(Boolean);
   const source = records[sourceIndex] || records[0];
-  const label = localize(node.label, language);
+  const label = node.kind === 'correspondence' ? correspondenceLabel(node, language, overlays) : localize(node.label, language);
   const group = tradition.nodes.find(({ id }) => id === node.group);
   const category = kindLabels[language]?.[node.kind] || kindLabels.en[node.kind] || '';
   return <aside className="pleroma-inspector" aria-label={t(language, 'sourcePanel')}>
     <div className="inspector-heading">
       <div>
         <h2 tabIndex={-1} ref={headingRef}>{label}</h2>
-        <p>{node.order && node.kind === 'sefirah' ? node.order + ' · ' : ''}{category}{group ? ' · ' + localize(group.label, language) : ''}</p>
+        <p>{node.order && ['sefirah', 'correspondence'].includes(node.kind) ? node.order + ' · ' : ''}{node.system ? localize(node.system, language) : category}{group ? ' · ' + localize(group.label, language) : ''}</p>
       </div>
       <button type="button" className="icon-button inspector-close" onClick={onClose} aria-label={t(language, 'closeInspector')}><Icon name="close" /></button>
     </div>
@@ -96,16 +99,15 @@ function SourceInspector({ node, tradition, language, onClose, tab, setTab, head
           <p dir="auto">{source.translator}</p>
           <p><a href={safeUrl(source.rightsUrl)} target="_blank" rel="noopener noreferrer">{source.rights}</a></p>
         </div>
-        <button type="button" className="passage-button" aria-expanded={expanded} aria-controls="source-exact-passage" onClick={() => setExpanded(!expanded)}>
+        {source.context && source.context !== source.excerpt && <button type="button" className="passage-button" aria-expanded={expanded} aria-controls="source-exact-passage" onClick={() => setExpanded(!expanded)}>
           {t(language, expanded ? 'collapsePassage' : 'readFullPassage')}<Icon name={expanded ? 'down' : 'chevron'} />
-        </button>
+        </button>}
         <a className="open-source" href={safeUrl(source.url)} target="_blank" rel="noopener noreferrer">{t(language, 'openSource')}<Icon name="external" /></a>
         {source.language !== language && <p className="source-language-note">{t(language, 'sourceLanguageWarning')}</p>}
       </> : <>
         <p className="editorial-label">{t(language, 'editorial')}</p>
         <p className="inspector-summary">{localize(node.summary, language)}</p>
         <p className="inspector-summary">{localize(node.interpretation, language)}</p>
-        <p className="source-language-note">{t(language, 'interpretationNote')}</p>
       </>}
     </div>
   </aside>;
@@ -123,48 +125,90 @@ export default function Explorer({ language, route, onRouteChange }) {
   const [listOpen, setListOpen] = useState(false);
   const [overlayMenu, setOverlayMenu] = useState(false);
   const [webglFallback, setWebglFallback] = useState(false);
+  const [personalState, setPersonalState] = useState(() => loadPersonalConnections());
+  const [personalOpen, setPersonalOpen] = useState(false);
+  const [personalId, setPersonalId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
   const headingRef = useRef(null);
   const listButtonRef = useRef(null);
   const overlayButtonRef = useRef(null);
   const returnFocusRef = useRef(null);
   const listRef = useRef(null);
   const inspectorRef = useRef(null);
+  const personalButtonRef = useRef(null);
   const visibleNodes = [...tradition.nodes, ...(tradition.id === 'john' && route.overlays.planets ? planetaryNodes : [])];
   const duplicateLabels = new Set(visibleNodes.filter((node, index, all) => all.some((other, otherIndex) => otherIndex !== index && localize(other.label, language) === localize(node.label, language))).map((node) => localize(node.label, language)));
   const requestedNode = route.node === 'none' ? null : visibleNodes.find(({ id }) => id === route.node);
-  const selected = route.node === 'none' ? null : requestedNode || visibleNodes.find(({ id }) => id === tradition.defaultNode) || visibleNodes[0];
+  const selectedNode = route.node === 'none' ? null : requestedNode || visibleNodes.find(({ id }) => id === tradition.defaultNode) || visibleNodes[0];
+  const treeOverlay = tradition.id === 'tree' && (route.overlays.tarot || route.overlays.astrology);
+  const selectedCorrespondence = treeOverlay && getCorrespondence(route.path);
+  const validCorrespondence = selectedCorrespondence && (selectedCorrespondence.kind !== 'association' || route.overlays.astrology) ? selectedCorrespondence : null;
+  const selectedPersonal = personalState.connections.find(({ id }) => id === personalId);
+  const selected = validCorrespondence || selectedNode;
+  const inspectorOpen = Boolean(selectedPersonal || selected);
+  const relatedConnections = !validCorrespondence && selectedNode ? personalState.connections.filter((connection) => [connection.from, connection.to].some((endpoint) => endpoint.kind === 'entity' && endpoint.traditionId === tradition.id && endpoint.nodeId === selectedNode.id)) : [];
   const overlaysEnabled = Object.values(route.overlays).some(Boolean);
 
   useEffect(() => {
     setZoom(1); setFocusLayer('all'); setCameraKey((value) => value + 1);
-    setTab('source'); setListOpen(false); setOverlayMenu(false);
+    setTab('source'); setListOpen(false); setOverlayMenu(false); setPersonalId(null);
     setEventKey((value) => value + 1);
   }, [tradition.id]);
-  useEffect(() => { setEventKey((value) => value + 1); }, [selected?.id, route.mode]);
+  useEffect(() => { setEventKey((value) => value + 1); }, [selected?.id, personalId, route.mode]);
   useEffect(() => {
-    if (route.node && route.node !== 'none' && !requestedNode) onRouteChange({ node: tradition.defaultNode }, true);
-  }, [requestedNode, route.node, tradition.defaultNode, onRouteChange]);
+    // Explicit selections clear this state in their handlers. URL normalization
+    // (such as removing a disabled overlay path) should leave personal notes open.
+    const clearPersonalSelection = () => setPersonalId(null);
+    window.addEventListener('popstate', clearPersonalSelection);
+    return () => window.removeEventListener('popstate', clearPersonalSelection);
+  }, []);
+  useEffect(() => {
+    if (route.path && !validCorrespondence) onRouteChange({ path: null }, true);
+    else if (!route.path && route.node && route.node !== 'none' && !requestedNode) onRouteChange({ node: tradition.defaultNode }, true);
+  }, [requestedNode, route.node, route.path, validCorrespondence, tradition.defaultNode, onRouteChange]);
   useEffect(() => { if (listOpen) listRef.current?.querySelector('[data-entity]')?.focus(); }, [listOpen]);
 
   function closeInspector() {
-    onRouteChange({ node: 'none' });
+    setPersonalId(null);
+    onRouteChange({ node: 'none', path: null });
     requestAnimationFrame(() => {
       const target = returnFocusRef.current;
-      if (target?.isConnected && typeof target.focus === 'function') target.focus();
-      else listButtonRef.current?.focus();
+      if (target?.isConnected && target.getClientRects().length && !target.closest('[hidden]') && !target.matches(':disabled') && typeof target.focus === 'function') target.focus();
+      if (document.activeElement !== target || !target?.getClientRects().length) listButtonRef.current?.focus();
     });
   }
   function selectNode(id) {
     if (!inspectorRef.current?.contains(document.activeElement)) returnFocusRef.current = document.activeElement;
-    onRouteChange({ node: id }); setListOpen(false);
+    setPersonalId(null); onRouteChange({ node: id, path: null }); setListOpen(false);
     requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+  }
+  function selectPath(id) {
+    returnFocusRef.current = document.activeElement;
+    setPersonalId(null); onRouteChange({ path: id }); setListOpen(false); setTab('source');
+    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+  }
+  function selectPersonal(id) {
+    returnFocusRef.current = document.activeElement;
+    setPersonalId(id); setListOpen(false);
+    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+  }
+  function updatePersonal(connections) {
+    const saved = savePersonalConnections(connections);
+    setPersonalState({ connections, warning: saved.warning });
+    if (!connections.some(({ id }) => id === personalId)) setPersonalId(null);
+  }
+  function navigateConnection({ tradition: traditionId, node }) {
+    const next = getTradition(traditionId);
+    setPersonalId(null); setPersonalOpen(false);
+    onRouteChange({ tradition: next.id, node, path: null, overlays: { paired: false, planets: false, torus: false, tarot: false, astrology: false } });
   }
   useEffect(() => {
     function escape(event) {
       if (event.key !== 'Escape') return;
       if (overlayMenu) { setOverlayMenu(false); overlayButtonRef.current?.focus(); event.preventDefault(); }
       else if (listOpen) { setListOpen(false); listButtonRef.current?.focus(); event.preventDefault(); }
-      else if (selected) { closeInspector(); event.preventDefault(); }
+      else if (personalOpen) { setPersonalOpen(false); personalButtonRef.current?.focus(); event.preventDefault(); }
+      else if (inspectorOpen) { closeInspector(); event.preventDefault(); }
     }
     window.addEventListener('keydown', escape);
     return () => window.removeEventListener('keydown', escape);
@@ -172,7 +216,8 @@ export default function Explorer({ language, route, onRouteChange }) {
 
   function changeTradition(id) {
     const next = getTradition(id);
-    onRouteChange({ tradition: id, node: next.defaultNode, overlays: { paired: false, planets: false, torus: false } });
+    setPersonalId(null);
+    onRouteChange({ tradition: id, node: next.defaultNode, path: null, overlays: { paired: false, planets: false, torus: false, tarot: false, astrology: false } });
   }
   function changeOverlay(id, checked) {
     onRouteChange({ overlays: { ...route.overlays, [id]: checked } }, true);
@@ -185,9 +230,10 @@ export default function Explorer({ language, route, onRouteChange }) {
   function fit() { setZoom(1); setFocusLayer('all'); setCameraKey((value) => value + 1); }
   const primaryOverlay = tradition.id === 'john' ? 'paired' : tradition.id === 'ezekiel' ? 'torus' : null;
   const primaryOverlayLabel = primaryOverlay === 'paired' ? 'pairedAspects' : 'toroidal';
-  const rendererProps = { tradition, language, selectedId: selected?.id, onSelect: selectNode, overlays: route.overlays, zoom, focusLayer, cameraKey, reducedMotion, eventKey, cloudUrl, onFailure: graphicsFailure };
+  const rendererProps = { tradition, language, selectedId: !validCorrespondence && !selectedPersonal ? selectedNode?.id : null, onSelect: selectNode, selectedPathId: !selectedPersonal ? validCorrespondence?.id : null, onSelectPath: selectPath, onSelectAssociation: selectPath, personalConnections: personalState.connections, selectedPersonalId: personalId, onSelectPersonal: selectPersonal, overlays: route.overlays, zoom, focusLayer, cameraKey, reducedMotion, eventKey, cloudUrl, onFailure: graphicsFailure };
 
   return <section className="pleroma" aria-labelledby="pleroma-title">
+    <div className="pleroma-header-panel">
     <div className="pleroma-title-row"><h1 id="pleroma-title">{t(language, 'title')}</h1><p>{t(language, 'subtitle')}</p></div>
     <div className="pleroma-toolbar">
       <nav className="tradition-tabs" aria-label={t(language, 'traditionNavigation')}>
@@ -199,7 +245,7 @@ export default function Explorer({ language, route, onRouteChange }) {
         </div>
         <div className="overlay-control">
           <label className="overlay-toggle"><input type="checkbox" checked={isMobile && primaryOverlay ? route.overlays[primaryOverlay] : overlaysEnabled || overlayMenu}
-            onChange={(event) => { if (primaryOverlay) changeOverlay(primaryOverlay, event.target.checked); if (!event.target.checked) onRouteChange({ overlays: { paired: false, planets: false, torus: false } }, true); setOverlayMenu(isMobile ? false : event.target.checked); if (!primaryOverlay && event.target.checked) setTab('interpretation'); }} />
+            onChange={(event) => { if (primaryOverlay) changeOverlay(primaryOverlay, event.target.checked); if (!event.target.checked) onRouteChange({ path: null, overlays: { paired: false, planets: false, torus: false, tarot: false, astrology: false } }, true); setOverlayMenu(isMobile && primaryOverlay ? false : event.target.checked); }} />
             <span>{t(language, isMobile && primaryOverlay ? primaryOverlayLabel : 'interpretiveOverlays')}</span></label>
           <button className="overlay-menu-button icon-button" ref={overlayButtonRef} type="button" aria-label={t(language, overlayMenu ? 'hideOverlays' : 'showOverlays')} aria-expanded={overlayMenu} aria-controls="overlay-options" onClick={() => setOverlayMenu(!overlayMenu)}><Icon name="down" /></button>
           {overlayMenu && <fieldset className="overlay-options" id="overlay-options">
@@ -211,14 +257,23 @@ export default function Explorer({ language, route, onRouteChange }) {
               <p>{t(language, 'planetsExplanation')}</p>
             </>}
             {tradition.id === 'ezekiel' && <><label><input type="checkbox" checked={route.overlays.torus} onChange={(event) => changeOverlay('torus', event.target.checked)} />{t(language, 'toroidal')}</label><p>{t(language, 'toroidalExplanation')}</p></>}
-            {['tree', 'plotinus'].includes(tradition.id) && <p>{t(language, 'interpretationNote')}</p>}
+            {tradition.id === 'tree' && <>
+              <p className="correspondence-system">{t(language, 'hermeticSystem')}</p>
+              <label><input type="checkbox" checked={Boolean(route.overlays.tarot)} onChange={(event) => changeOverlay('tarot', event.target.checked)} />{t(language, 'tarot')}</label>
+              <label><input type="checkbox" checked={Boolean(route.overlays.astrology)} onChange={(event) => changeOverlay('astrology', event.target.checked)} />{t(language, 'astrology')}</label>
+              <p>{t(language, 'hermeticHint')}</p>
+            </>}
+            {tradition.id === 'plotinus' && <p>{t(language, 'personalHint')}</p>}
           </fieldset>}
         </div>
+        <button type="button" className="personal-open-button" ref={personalButtonRef} aria-expanded={personalOpen} aria-controls="personal-connections-panel" onClick={() => { setPersonalOpen(!personalOpen); setEditingId(null); }}>{t(language, 'personalConnections')}</button>
       </div>
     </div>
+    </div>
+    <div hidden={!personalOpen}><PersonalConnections language={language} connections={personalState.connections} onChange={updatePersonal} selectedNode={selectedNode} tradition={tradition} onNavigate={navigateConnection} onSelectConnection={selectPersonal} selectedConnectionId={personalId} storageWarning={personalState.warning} editingId={editingId} onEditingFinished={() => setEditingId(null)} /></div>
     {isMobile && route.overlays.paired && <p className="mobile-overlay-caption">{t(language, 'pairedExplanation')}</p>}
     {webglFallback && <p className="pleroma-status" role="status">{t(language, 'webglFallback')}</p>}
-    <div className={'pleroma-workspace' + (selected ? ' has-inspector' : '')}>
+    <div className={'pleroma-workspace' + (inspectorOpen ? ' has-inspector' : '')}>
       <div className="pleroma-canvas" aria-label={t(language, 'mapLabel')}>
         <div className="atlas-renderer" key={tradition.id} data-mode={route.mode}>
           {route.mode === '3d' ? <GraphicsBoundary key={tradition.id} onFailure={graphicsFailure}>
@@ -241,10 +296,22 @@ export default function Explorer({ language, route, onRouteChange }) {
         <p className="spatial-note">{tradition.id === 'tree' ? t(language, 'schematicNote') : t(language, 'spatialNote')}</p>
         {listOpen && <section className="entity-list-panel" id="pleroma-entity-list" ref={listRef} aria-labelledby="entity-list-heading">
           <div><h2 id="entity-list-heading">{t(language, 'entityList')}</h2><button type="button" className="icon-button" aria-label={t(language, 'closeList')} onClick={() => { setListOpen(false); listButtonRef.current?.focus(); }}><Icon name="close" /></button></div>
-          <ul>{visibleNodes.map((node) => <li key={node.id}><button type="button" data-entity={node.id} aria-pressed={selected?.id === node.id} onClick={() => selectNode(node.id)}>{localize(node.label, language)}{duplicateLabels.has(localize(node.label, language)) && <small className="entity-kind">{kindLabels[language][node.kind]}{node.group ? ' · ' + localize(tradition.nodes.find(({ id }) => id === node.group)?.label, language) : ''}</small>}</button></li>)}</ul>
+          <ul>{visibleNodes.map((node) => <li key={node.id}><button type="button" data-entity={node.id} aria-pressed={!selectedPersonal && selected?.id === node.id} onClick={() => selectNode(node.id)}>{localize(node.label, language)}{duplicateLabels.has(localize(node.label, language)) && <small className="entity-kind">{kindLabels[language][node.kind]}{node.group ? ' · ' + localize(tradition.nodes.find(({ id }) => id === node.group)?.label, language) : ''}</small>}</button></li>)}</ul>
+          {treeOverlay && <><h3>{t(language, 'paths')}</h3><ul>{correspondencePaths.map((path) => <li key={path.id}><button type="button" data-path={path.id} aria-pressed={!selectedPersonal && validCorrespondence?.id === path.id} onClick={() => selectPath(path.id)}>{path.order} · {correspondenceLabel(path, language, route.overlays)}</button></li>)}</ul></>}
+          {tradition.id === 'tree' && route.overlays.astrology && <><h3>{t(language, 'celestial')}</h3><ul>{celestialAssociations.map((association) => <li key={association.id}><button type="button" data-path={association.id} aria-pressed={!selectedPersonal && validCorrespondence?.id === association.id} onClick={() => selectPath(association.id)}>{localize(tradition.nodes.find(({ id }) => id === association.parentId)?.label, language)} · {localize(association.label, language)}</button></li>)}</ul></>}
         </section>}
       </div>
-      {selected && <div className="inspector-holder" ref={inspectorRef}><SourceInspector node={selected} tradition={tradition} language={language} onClose={closeInspector} tab={tab} setTab={setTab} headingRef={headingRef} paired={route.overlays.paired} /></div>}
+      {inspectorOpen && <div className="inspector-holder" ref={inspectorRef}>
+        {selectedPersonal ? <aside className="pleroma-inspector" aria-label={t(language, 'personalConnection')}>
+          <div className="inspector-heading"><div><h2 tabIndex={-1} ref={headingRef} dir="auto">{selectedPersonal.label}</h2><p>{t(language, 'personalConnection')}</p></div><button type="button" className="icon-button inspector-close" aria-label={t(language, 'closeInspector')} onClick={closeInspector}><Icon name="close" /></button></div>
+          <p className="inspector-summary personal-note" dir="auto">{selectedPersonal.note || t(language, 'personalHint')}</p>
+          <p className="editorial-label">{t(language, 'connectedWith')}</p>
+          <div className="connection-targets">{[selectedPersonal.from, selectedPersonal.to].map((endpoint, index) => endpoint.kind === 'entity' ? <button type="button" key={index} onClick={() => navigateConnection({ tradition: endpoint.traditionId, node: endpoint.nodeId })}>{personalEndpointLabel(endpoint, language)}</button> : <p key={index} dir="auto">{personalEndpointLabel(endpoint, language)}</p>)}</div>
+          <button type="button" className="passage-button" onClick={() => { setPersonalOpen(true); setEditingId(selectedPersonal.id); requestAnimationFrame(() => document.getElementById('personal-connections-panel')?.scrollIntoView({ behavior: reducedMotion ? 'instant' : 'smooth', block: 'start' })); }}>{t(language, 'personalConnections')}</button>
+        </aside> : <><SourceInspector node={selected} tradition={tradition} language={language} onClose={closeInspector} tab={tab} setTab={setTab} headingRef={headingRef} paired={route.overlays.paired} overlays={route.overlays} />
+          {relatedConnections.length > 0 && <section className="related-connections" aria-label={t(language, 'personalConnections')}><h3>{t(language, 'personalConnections')}</h3><ul>{relatedConnections.map((connection) => <li key={connection.id}><button type="button" onClick={() => selectPersonal(connection.id)} dir="auto">{connection.label}</button></li>)}</ul></section>}
+        </>}
+      </div>}
     </div>
   </section>;
 }

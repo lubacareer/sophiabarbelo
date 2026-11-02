@@ -537,14 +537,14 @@ export const sources = {
 const L = (en, he, ru) => ({ en, he, ru });
 const edge = (from, to, kind = 'textual') => ({ from, to, kind });
 const pairedNote = L(
-  'The paired-aspect overlay is a modern visual interpretation. Its two markers refer to this one aeon; they do not add another named ancient being.',
-  'שכבת ההיבטים הזוגיים היא פרשנות חזותית מודרנית. שני הסמנים מתייחסים לאותו אֵאוֹן, ואינם מוסיפים ישות עתיקה בעלת שם.',
-  'Слой парных аспектов — современная визуальная интерпретация. Два маркера обозначают один эон, а не ещё одно древнее именованное существо.'
+  "Two aspects invite you to explore the qualities of one aeon through contrast, balance, and relationship. What other pairings come to mind?",
+  "שני היבטים מזמינים לחקור איכויות של איאון אחד דרך ניגוד, איזון וקשר. אילו זוגות נוספים עולים בדעתכם?",
+  "Два аспекта приглашают исследовать качества одного эона через контраст, равновесие и отношения. Какие ещё пары приходят на ум?"
 );
 const johnDiagramNote = L(
-  'Curved links and spatial placement are modern aids for following this text. They do not claim that this cosmos is a physical astronomical map.',
-  'הקווים המעוקלים והמיקום במרחב הם אמצעי המחשה מודרניים לקריאת הטקסט, ולא טענה שזהו מיפוי אסטרונומי פיזיקלי.',
-  'Изогнутые связи и пространственное размещение помогают читать текст; они не представляют эту космологию физической астрономической картой.'
+  "Follow the light and curves through this narrative. You might explore echoes in Tarot, astrology, other cosmologies, or your own experience.",
+  "עקבו אחר האור והעקומות לאורך הסיפור. אפשר לחקור הדהודים בטארוט, באסטרולוגיה, בקוסמולוגיות אחרות או בחוויה שלכם.",
+  "Следуйте свету и изгибам этого повествования. Исследуйте созвучия с Таро, астрологией, другими космологиями или собственным опытом."
 );
 const johnNodes = [];
 function johnNode(id, label, kind, layer, sourceIds, summary, extra = {}) {
@@ -617,13 +617,13 @@ johnNode('yaldabaoth', L('Yaltabaoth', 'ילטבאות', 'Ялтабаоф'), 'r
   'Главный правитель получает силу от матери, а затем устанавливает правителей над семью небесами.'
 ));
 for (let n = 1; n <= 7; n++) johnNode(`heaven-${n}`, L(`Heaven ${n}`, `רקיע ${n}`, `Небо ${n}`), 'heaven', 'heavens', ['john-heavens'], L(
-  `The text names seven heavens and corresponding kings. This numbered marker locates heaven ${n} without assigning a planet to its ruler.`,
-  `הטקסט מזכיר שבעה רקיעים ומלכים המקבילים להם. סמן ${n} מציין רקיע בלי לזהות את שליטו עם כוכב לכת.`,
-  `Текст называет семь небес и соответствующих царей. Маркер ${n} обозначает небо без отождествления его правителя с планетой.`
+  `The text names seven heavens and corresponding kings. This marker offers a place to explore heaven ${n} and its symbolic associations.`,
+  `הטקסט מזכיר שבעה רקיעים ומלכים המקבילים להם. סמן ${n} מציע מקום לחקור את הרקיע ואת הקשריו הסמליים.`,
+  `Текст называет семь небес и соответствующих царей. Маркер ${n} предлагает исследовать это небо и его символические связи.`
 ), { order: n, interpretation: L(
-  'Planet names belong to a separately sourced classical comparison, not to an identification of this text’s rulers.',
-  'שמות כוכבי הלכת שייכים להשוואה קלאסית ממקור נפרד, ולא לזיהוי שליטי הטקסט.',
-  'Названия планет относятся к отдельному классическому сопоставлению, а не к идентификации правителей этого текста.'
+  'Explore the seven heavens alongside classical planets, Tarot imagery, or your own symbols. Save the connections that resonate with you.',
+  'חקרו את שבעת הרקיעים לצד כוכבי הלכת הקלאסיים, דימויי טארוט או סמלים משלכם. שמרו את הקשרים שמעוררים בכם הד.',
+  'Исследуйте семь небес рядом с классическими планетами, образами Таро или своими символами. Сохраните связи, которые вам откликаются.'
 ) });
 const johnTradition = {
   id: 'john', title: L('Secret Book of John', 'הספר הסודי של יוחנן', 'Тайная книга Иоанна'), defaultNode: 'barbelo', nodes: johnNodes,
@@ -635,9 +635,9 @@ const johnTradition = {
 };
 
 const ezekielNote = L(
-  'These curves reconstruct the relationships in a vision. A mathematical torus is an optional modern visualization, not a geometric specification given by Ezekiel.',
-  'העקומות ממחישות יחסים המתוארים בחזון. טורוס מתמטי הוא המחשה מודרנית אופציונלית, ולא מפרט גאומטרי שנתן יחזקאל.',
-  'Кривые реконструируют отношения в видении. Математический тор — необязательная современная визуализация, а не геометрическая схема, заданная Иезекиилем.'
+  "Movement, light, and living forms meet in this vision. Explore the interlocking torus layer, or follow the symbolic associations these images awaken in you.",
+  "תנועה, אור וצורות חיות נפגשים בחזון. גלו את שכבת הטורוסים המשתלבים, או עקבו אחר הקשרים הסמליים שהדימויים מעוררים בכם.",
+  "В этом видении встречаются движение, свет и живые формы. Исследуйте переплетённые торы или символические ассоциации, которые пробуждают эти образы."
 );
 const ezekielNodes = [
   { id: 'throne', label: L('Throne', 'הכיסא', 'Престол'), kind: 'throne', layer: 'vision', sourceIds: ['ezekiel-throne'], summary: L('Above the expanse, Ezekiel describes the likeness of a throne and a radiant humanlike appearance.', 'מעל הרקיע מתאר יחזקאל דמות כיסא ומראה זוהר דמוי אדם.', 'Над сводом Иезекииль описывает подобие престола и сияющий человекоподобный образ.') },
@@ -656,14 +656,14 @@ const ezekielTradition = {
 };
 
 const treeNote = L(
-  'This is a later three-column teaching schematic. The thirteen curved connectors are editorial layout aids; arrangements and paths vary by tradition. No Tarot, planetary, or twenty-two-path assignments are implied.',
-  'זוהי סכמת לימוד מאוחרת בשלושה טורים. שלושה־עשר הקשרים המעוקלים הם עזרי המחשה עריכתיים; הסידורים והנתיבים משתנים בין מסורות. אין כאן שיוכי טארוט, כוכבי לכת או עשרים ושניים נתיבים.',
-  'Это поздняя учебная схема в три столбца. Тринадцать изогнутых соединений — редакционные средства изображения; расположения и пути различаются по традициям. Соответствия Таро, планетам или двадцати двум путям не подразумеваются.'
+  "This three-column Tree is a starting point for exploration. Follow its curves, turn on Tarot or astrology, and discover connections through meditation, other esoteric traditions, or your own intuition.",
+  "העץ בשלושה טורים הוא נקודת מוצא לחקירה. עקבו אחר עקומותיו, הפעילו טארוט או אסטרולוגיה, וגלו קשרים דרך מדיטציה, מסורות אזוטריות אחרות או האינטואיציה שלכם.",
+  "Это Древо в три столбца — отправная точка исследования. Следуйте его изгибам, включайте Таро или астрологию и открывайте связи через медитацию, другие эзотерические традиции или свою интуицию."
 );
 const sefirot = [
   ['keter', L('Keter · Crown', 'כתר', 'Кетер · Венец'), L('The source speaks of the supernal Crown as a crown of kingship.', 'המקור מדבר על הכתר העליון ככתר מלכות.', 'Источник говорит о высшем Венце как о венце царства.')],
   ['chokhmah', L('Chokhmah · Wisdom', 'חכמה', 'Хохма · Мудрость'), L('Wisdom is associated with the brain and inward thought in this passage.', 'החכמה נקשרת במקטע זה למוח ולמחשבה שבפנים.', 'Мудрость в этом отрывке связана с мозгом и внутренней мыслью.')],
-  ['binah', L('Binah · Understanding', 'בינה', 'Бина · Понимание'), L('Understanding is associated with the heart and the heart’s discernment.', 'הבינה נקשרת ללב וליכולת ההבנה של הלב.', 'Понимание связано с сердцем и его способностью постигать.')],
+  ['binah', L('Binah · Understanding', 'בינה', 'Бина · Понимание'), L('The source connects Binah with the heart’s understanding. What connections arise for you—with intuition, reflection, or another symbolic tradition?', 'המקור קושר את בינה להבנת הלב. אילו קשרים עולים בכם—עם אינטואיציה, התבוננות או מסורת סמלית אחרת?', 'Источник связывает Бину с пониманием сердца. Какие связи возникают у вас — с интуицией, размышлением или другой символической традицией?')],
   ['chesed', L('Chesed · Kindness', 'חסד', 'Хесед · Милость'), L('Kindness is associated with the right arm in the source’s bodily imagery.', 'החסד נקשר לזרוע הימנית בדימוי הגופני שבמקור.', 'Милость связана с правой рукой в телесной образности источника.')],
   ['gevurah', L('Gevurah · Strength', 'גבורה', 'Гвура · Сила'), L('Strength is associated with the left arm in the source’s bodily imagery.', 'הגבורה נקשרת לזרוע השמאלית בדימוי הגופני שבמקור.', 'Сила связана с левой рукой в телесной образности источника.')],
   ['tiferet', L('Tiferet · Beauty', 'תפארת', 'Тиферет · Красота'), L('Beauty is associated with the body in the source’s bodily imagery.', 'התפארת נקשרת לגוף בדימוי הגופני שבמקור.', 'Красота связана с телом в образности источника.')],
@@ -681,9 +681,9 @@ const treeTradition = {
 };
 
 const plotinusNote = L(
-  'The rings are a spatial analogy for metaphysical dependence, not distances or a sequence of events in time. Comparisons with other traditions are editorial parallels, not claims of identity or historical derivation.',
-  'הטבעות הן משל מרחבי לתלות מטפיזית, ולא מרחקים או רצף אירועים בזמן. ההשוואות למסורות אחרות הן הקבלות עריכתיות, ולא טענות לזהות או למוצא היסטורי.',
-  'Кольца — пространственная аналогия метафизической зависимости, а не расстояния или последовательность событий во времени. Сопоставления с другими традициями — редакционные параллели, а не утверждения тождества или исторического происхождения.'
+  "These rings invite reflection on unity, thought, soul, and the living world. Follow their relationships into other traditions or your own experience of connection.",
+  "הטבעות מזמינות התבוננות באחדות, במחשבה, בנפש ובעולם החי. עקבו אחר הקשרים אל מסורות אחרות או אל חוויית החיבור שלכם.",
+  "Кольца приглашают размышлять о единстве, мысли, душе и живом мире. Проследите их связи с другими традициями или собственным опытом сопричастности."
 );
 const plotinusNodes = [
   { id: 'one', label: L('The One', 'האחד', 'Единое'), kind: 'root', layer: 'center', order: 0, sourceIds: ['plotinus-one', 'plotinus-order'], summary: L('The One is described as a principle beyond Being, prior to Intellect and Soul.', 'האחד מתואר כעיקרון שמעבר להוויה, קודם לשכל ולנפש.', 'Единое описано как начало за пределами бытия, предшествующее Уму и Душе.') },
@@ -701,39 +701,39 @@ const plotinusTradition = {
 // Comparative observations are editorial: shared display motifs never assert identity.
 const compare = (tradition, id, text) => { tradition.nodes.find((node) => node.id === id).interpretation = text; };
 compare(johnTradition, 'invisible-spirit', L(
-  'A modern comparison places this unseen source beside Plotinus’s One as two accounts of a source beyond ordinary categories. That parallel does not establish identity or historical derivation; the curved geometry remains a modern reading aid.',
-  'השוואה מודרנית מציבה את המקור הבלתי־נראה לצד האחד של פלוטינוס כשני תיאורים של מקור שמעבר לקטגוריות רגילות. הקבלה זו אינה מוכיחה זהות או מוצא היסטורי; הגאומטריה המעוקלת היא עזר קריאה מודרני.',
-  'Современное сопоставление ставит невидимый источник рядом с Единым Плотина как два описания начала за пределами обычных категорий. Такая параллель не устанавливает тождества или исторического происхождения; криволинейная схема остаётся современным средством чтения.'
+  "The Invisible Spirit and Plotinus’s One invite reflection on a source beyond ordinary categories. What do their images of unity open up for you?",
+  "הרוח הבלתי־נראית והאחד של פלוטינוס מזמינים התבוננות במקור שמעבר לקטגוריות רגילות. מה פותחים עבורכם דימויי האחדות שלהם?",
+  "Невидимый Дух и Единое Плотина приглашают размышлять об истоке за пределами привычных категорий. Что открывают для вас их образы единства?"
 ));
 compare(johnTradition, 'barbelo', L(
-  'Barbelo and Plotinus’s Intellect can be compared as images of a first source. Their accounts and attributes differ: placing both near a luminous center does not identify the two figures or make either a physical planet.',
-  'אפשר להשוות את ברבלו ואת השכל של פלוטינוס כצלמים של מקור ראשון. תיאוריהם ותכונותיהם שונים: הצבתם סמוך למרכז זוהר אינה מזהה ביניהם ואינה הופכת אותם לכוכבי לכת.',
-  'Барбело и Ум Плотина можно сопоставить как образы первого начала. Их описания и свойства различны: близость к светящемуся центру не отождествляет их и не превращает в физические планеты.'
+  "Explore Barbelo alongside Intellect, wisdom, or an image from Tarot that resonates with you. How do receiving, reflection, and creative light meet in your reading?",
+  "חקרו את ברבלו לצד השכל, החכמה או דימוי מטארוט שמעורר בכם הד. כיצד נפגשים קבלה, השתקפות ואור יוצר בקריאה שלכם?",
+  "Исследуйте Барбело рядом с Умом, мудростью или близким вам образом Таро. Как в вашем прочтении встречаются восприимчивость, отражение и творческий свет?"
 ));
 compare(ezekielTradition, 'throne', L(
-  'The throne and the Tree’s crown both offer imagery of elevated authority, but these are different texts, periods, and literary settings. Their vertical placement here is an editorial comparison, not a claim that the throne is Keter.',
-  'הכיסא והכתר שבעץ מציעים שניהם דימוי של סמכות עליונה, אך הם שייכים לטקסטים, לתקופות ולהקשרים ספרותיים שונים. מיקומם הגבוה כאן הוא הקבלה עריכתית, ולא טענה שהכיסא הוא כתר.',
-  'Престол и Венец Древа дают образы высшей власти, но принадлежат разным текстам, эпохам и литературным контекстам. Их верхнее положение здесь — редакционное сопоставление, а не утверждение, что престол является Кетер.'
+  "A throne and a crown can evoke authority, presence, or a meeting of earth and sky. Explore their resonance with Keter and with symbols from your own practice.",
+  "כיסא וכתר יכולים לעורר תחושות של סמכות, נוכחות או מפגש של ארץ ושמים. גלו את ההד שלהם בכתר ובסמלים מהתרגול שלכם.",
+  "Престол и венец могут вызывать образы власти, присутствия или встречи земли и неба. Исследуйте их созвучие с Кетер и символами вашей практики."
 ));
 for (const node of ezekielNodes.filter((node) => node.kind === 'wheel')) node.interpretation = L(
-  'These visionary wheels differ from Plotinus’s metaphysical circles of light. Their shared circular display invites comparison without claiming a single cosmic structure. The torus option is a modern geometric interpretation, not Ezekiel’s mathematical specification.',
-  'אופני החזון שונים ממעגלי האור המטפיזיים של פלוטינוס. התצוגה המעגלית המשותפת מזמינה השוואה בלי לטעון למבנה קוסמי יחיד. אפשרות הטורוס היא פרשנות גאומטרית מודרנית, ולא מפרט מתמטי של יחזקאל.',
-  'Колёса видения отличаются от метафизических кругов света Плотина. Общая круговая форма предлагает сравнение, не утверждая единой космической структуры. Тор — современная геометрическая интерпретация, а не математическое указание Иезекииля.'
+  'Wheels, circles, and interwoven movement invite many readings. Explore their resonance with the Wheel of Fortune, planetary cycles, or the circles of light in Plotinus. What patterns do you notice?',
+  'אופנים, מעגלים ותנועה משתלבת מזמינים קריאות רבות. גלו את ההד שלהם בגלגל המזל, במחזורי כוכבי הלכת או במעגלי האור של פלוטינוס. באילו דפוסים אתם מבחינים?',
+  'Колёса, круги и переплетённое движение приглашают к разным прочтениям. Исследуйте их созвучие с Колесом Фортуны, планетарными циклами или кругами света Плотина. Какие узоры вы замечаете?'
 );
 compare(treeTradition, 'keter', L(
-  'Keter is counted among ten sefirot, unlike Plotinus’s One beyond Being. A comparison may notice their prominence without equating their roles. This later three-column layout and its thirteen curved connections are editorial teaching aids; paths vary by tradition.',
-  'כתר נמנה עם עשר הספירות, בשונה מהאחד של פלוטינוס שמעבר להוויה. אפשר להשוות את בולטותם בלי לזהות את תפקידיהם. הסכמה המאוחרת בשלושה טורים ושלושה־עשר קשריה המעוקלים היא עזר לימוד עריכתי; הנתיבים משתנים בין מסורות.',
-  'Кетер входит в десять сфирот, в отличие от Единого Плотина за пределами бытия. Можно сравнить их значимость, не отождествляя роли. Эта поздняя схема в три столбца с тринадцатью кривыми связями — редакционное учебное пособие; пути различаются по традициям.'
+  "The Crown offers a place to reflect on beginnings, unity, and possibility. Explore its celestial correspondence, compare it with the One, or trace a connection of your own.",
+  "הכתר מציע מקום להתבונן בהתחלות, באחדות ובאפשרות. גלו את ההקבלה השמימית שלו, השוו אותו לאחד או התוו קשר משלכם.",
+  "Венец даёт пространство для размышления о началах, единстве и возможности. Исследуйте его небесное соответствие, сравните с Единым или проложите собственную связь."
 ));
 compare(plotinusTradition, 'one', L(
-  'A modern comparison may set the One beside John’s Invisible Spirit because both texts exceed ordinary categories when speaking of a first source. Similar wording or a common center in this atlas does not establish that the teachings are identical or that one derives from the other.',
-  'השוואה מודרנית יכולה להציב את האחד לצד הרוח הבלתי־נראית של יוחנן, מפני ששני הטקסטים חורגים מקטגוריות רגילות בדברם על מקור ראשון. ניסוח דומה או מרכז משותף באטלס אינם מוכיחים זהות של התורות או שמקור האחת באחרת.',
-  'Современное сопоставление может поставить Единое рядом с Невидимым Духом Иоанна: оба текста выходят за обычные категории, говоря о первом начале. Сходные слова или общий центр атласа не доказывают тождества учений либо происхождения одного из другого.'
+  "Explore the One alongside the Invisible Spirit or the Crown. What does a shared center suggest to you about unity, difference, and the unfolding of experience?",
+  "חקרו את האחד לצד הרוח הבלתי־נראית או הכתר. מה מציע לכם מרכז משותף על אחדות, שוני והתפתחות החוויה?",
+  "Исследуйте Единое рядом с Невидимым Духом или Венцом. Что общий центр подсказывает вам о единстве, различии и раскрытии опыта?"
 ));
 compare(plotinusTradition, 'intellect', L(
-  'Intellect and Barbelo can be compared as images of a first source, but their descriptions belong to distinct systems. Plotinus’s rings indicate metaphysical dependence, not physical distances, elapsed time, or an identification with a Gnostic figure.',
-  'אפשר להשוות את השכל ואת ברבלו כצלמים של מקור ראשון, אך תיאוריהם שייכים למערכות שונות. טבעות פלוטינוס מציינות תלות מטפיזית, ולא מרחקים פיזיים, זמן שחלף או זיהוי עם דמות גנוסטית.',
-  'Ум и Барбело можно сопоставить как образы первого начала, но их описания принадлежат разным системам. Кольца Плотина обозначают метафизическую зависимость, а не физические расстояния, прошедшее время или тождество с гностической фигурой.'
+  "Intellect invites reflection on thought becoming form. Compare its luminous place with Barbelo, a Tarot image, or another symbol of creative awareness.",
+  "השכל מזמין התבוננות במחשבה הנעשית לצורה. השוו את מקומו הזוהר לברבלו, לדימוי טארוט או לסמל אחר של מודעות יוצרת.",
+  "Ум приглашает размышлять о мысли, обретающей форму. Сопоставьте его сияющее место с Барбело, образом Таро или другим символом творческого осознания."
 ));
 
 export const traditions = [johnTradition, ezekielTradition, treeTradition, plotinusTradition];
@@ -749,9 +749,9 @@ export const planetaryNodes = planetNames.map(([id, label], order) => ({
     `${label.ru} занимает ${order + 1}-е место изнутри в этом отдельно документированном классическом геоцентрическом сопоставлении.`
   ),
   interpretation: L(
-    'This overlay reverses Cicero’s outward-to-inward list. It does not identify a planet with a Gnostic ruler and is not modern astronomy.',
-    'שכבה זו הופכת את הרשימה של קיקרו, מן החוץ פנימה. היא אינה מזהה כוכב לכת עם שליט גנוסטי ואינה אסטרונומיה מודרנית.',
-    'Этот слой обращает список Цицерона, идущий снаружи внутрь. Он не отождествляет планеты с гностическими правителями и не представляет современную астрономию.'
+    'Cicero’s classical spheres offer one starting point. Explore their rhythms alongside the heavens, astrological meanings, or your own symbolic connections.',
+    'הספירות הקלאסיות של קיקרו מציעות נקודת מוצא אחת. חקרו את מקצביהן לצד הרקיעים, משמעויות אסטרולוגיות או הקשרים הסמליים שלכם.',
+    'Классические сферы Цицерона предлагают отправную точку. Исследуйте их ритмы рядом с небесами, астрологическими смыслами или своими символическими связями.'
   ),
 }));
 export const planetarySourceId = 'cicero-planets';

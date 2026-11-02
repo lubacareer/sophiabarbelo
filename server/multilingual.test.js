@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
+import { modelEnvironment } from '../test-support/models.js';
 import { AppError } from './errors.js';
 import { analyzeConfigured } from './provider.js';
 import { analyzeWithGrok, rhetoricCategories, schema, validatedResult } from './grok.js';
@@ -21,29 +22,13 @@ async function post(base, body, headers = {}) {
   return { status: response.status, body: await response.json(), retryAfter: response.headers.get('retry-after') };
 }
 
-async function withEnvironment(values, run) {
-  const previous = {};
-  for (const [key, value] of Object.entries(values)) {
-    previous[key] = process.env[key];
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-  try { return await run(); }
-  finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
-
 test('API validates language before quota or URL extraction and returns the exact analyzed source', async () => {
   let acquisitions = 0;
   let extractions = 0;
   const seen = [];
   const article = 'זו כתבה בעברית. Это статья на русском. A mixed-language article.';
   const app = createApp({
-    deployment: 'public',
+    deployment: 'public', modelEnvironment,
     sharedLimiter: { acquire: async () => { acquisitions++; return async () => {}; } },
     extract: async () => { extractions++; return article; },
     analyze: async (text, options) => { seen.push({ text, options }); return { ...emptyResult(), sourceText: 'untrusted provider value' }; },
@@ -73,7 +58,7 @@ test('API validates language before quota or URL extraction and returns the exac
 test('HTTP errors localize validation, URL failures and store failures without changing the error shape or retry header', async () => {
   const busy = new AppError(429, 'Too many analyses. Please try again later.');
   busy.retryAfter = 17;
-  const app = createApp({ deployment: 'public', sharedLimiter: { acquire: async () => { throw busy; } } });
+  const app = createApp({ deployment: 'public', modelEnvironment, sharedLimiter: { acquire: async () => { throw busy; } } });
   await withServer(app, async (base) => {
     const headers = { 'x-forwarded-for': '8.8.8.8' };
     for (const language of ['he', 'ru']) {
@@ -93,37 +78,47 @@ test('HTTP errors localize validation, URL failures and store failures without c
   });
 });
 
-test('language is forwarded through the free model, administrator fallback and direct local providers', async () => {
-  await withEnvironment({ VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: 'public', SOPHIA_GROQ_FREE_CONFIRMED: 'true' }, async () => {
-    const calls = [];
-    await analyzeConfigured('טענה', { language: 'he' }, { groq: async (_text, options) => {
-      calls.push(options);
-      return emptyResult();
-    } });
-    assert.deepEqual(calls.map(({ model, language }) => ({ model, language })), [
-      { model: 'openai/gpt-oss-120b', language: 'he' },
-    ]);
-    process.env.SOPHIA_DEPLOYMENT_ROLE = 'admin';
-    const adminCalls = [];
-    const error = new AppError(503, 'Rate limited');
-    error.providerRateLimited = true;
-    const admin = await analyzeConfigured('Утверждение', { language: 'ru', reasoningEffort: 'high' }, {
-      grok: async (_text, options) => { adminCalls.push(options); throw error; },
-      groq: async (_text, options) => { adminCalls.push(options); return emptyResult(); },
-    });
-    assert.deepEqual(adminCalls.map(({ language }) => language), ['ru', 'ru']);
-    assert.equal(adminCalls[0].reasoningEffort, 'high');
-    assert.equal(Object.hasOwn(adminCalls[1], 'reasoningEffort'), false);
-    assert.equal(admin.limitations[0], localize('Grok reached its usage limit, so a free research model was used.', 'ru'));
+test('daily public quota errors are localized and retain Retry-After', async () => {
+  const error = new AppError(429, 'Daily analysis limit reached. Please try again later.');
+  error.retryAfter = 43_210;
+  const app = createApp({ deployment: 'public', modelEnvironment, sharedLimiter: { acquire: async () => { throw error; } } });
+  const messages = {
+    en: error.message,
+    he: 'מכסת הניתוחים ל־24 שעות מוצתה. יש לנסות שוב מאוחר יותר.',
+    ru: 'Достигнут лимит анализов за 24 часа. Повторите попытку позже.',
+  };
+  await withServer(app, async (base) => {
+    for (const [language, message] of Object.entries(messages)) {
+      const response = await post(base, { type: 'text', content: 'A claim', language }, { 'x-forwarded-for': '8.8.8.8' });
+      assert.equal(response.status, 429);
+      assert.equal(response.retryAfter, '43210');
+      assert.deepEqual(response.body, { error: message });
+    }
   });
-  await withEnvironment({ VERCEL: undefined, ANALYSIS_PROVIDER: 'groq' }, async () => {
+});
+
+test('language is forwarded through every selected deployed model and the existing local providers', async () => {
+  for (const deployment of ['public', 'admin']) {
+    for (const [modelId, provider] of [['luna', 'openai'], ['gemini-3.8-flash', 'gemini'], ['glm-4.7-flash', 'cloudflare'], ['grok-4.7', 'grok']]) {
+      const calls = [];
+      const output = await analyzeConfigured('טענה. Утверждение.', { modelId, language: 'ru', ...(deployment === 'admin' && provider === 'grok' ? { reasoningEffort: 'high' } : {}) }, {
+        deployment, environment: modelEnvironment,
+        [provider]: async (_text, options) => { calls.push(options); return emptyResult(); },
+      });
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].language, 'ru');
+      assert.equal(output.analysisModelId, modelId);
+      if (deployment === 'admin' && provider === 'grok') assert.equal(calls[0].reasoningEffort, 'high');
+    }
+  }
+  for (const [provider, adapter, language] of [['groq', 'groq', 'he'], ['xai', 'grok', 'ru'], ['openai', 'openai', 'en']]) {
     const seen = [];
-    const providers = { groq: async (_text, options) => { seen.push(options); return emptyResult(); }, grok: async (_text, options) => { seen.push(options); return emptyResult(); } };
-    await analyzeConfigured('Text', { language: 'he' }, providers);
-    process.env.ANALYSIS_PROVIDER = 'xai';
-    await analyzeConfigured('Text', { language: 'ru' }, providers);
-    assert.deepEqual(seen, [{ language: 'he' }, { language: 'ru' }]);
-  });
+    await analyzeConfigured('Text', { language }, {
+      deployment: 'local', environment: { ANALYSIS_PROVIDER: provider },
+      [adapter]: async (_text, options) => { seen.push(options); return emptyResult(); },
+    });
+    assert.deepEqual(seen, [{ language }]);
+  }
 });
 
 test('both provider prompts select output language while preserving original Unicode excerpts and strict category fields', async () => {

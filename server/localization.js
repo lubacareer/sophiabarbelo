@@ -3,6 +3,12 @@ export const languages = ['en', 'he', 'ru'];
 // English messages remain the internal keys so existing callers and logs retain
 // their meaning. Translate only trusted application messages, never source text.
 const messages = {
+  'Choose a valid symbolic reading setting.': ['יש לבחור הגדרה תקינה לקריאה סמלית.', 'Выберите допустимую настройку символического прочтения.'],
+  'The analysis took too long. Please try again.': ['הניתוח נמשך זמן רב מדי. יש לנסות שוב.', 'Анализ занял слишком много времени. Повторите попытку.'],
+  'Choose a valid analysis model.': ['יש לבחור מודל ניתוח תקין.', 'Выберите допустимую модель анализа.'],
+  'Model selection is available on deployed public and administrator sites only.': ['בחירת מודל זמינה רק באתר הציבורי ובאתר המנהל הפרוסים.', 'Выбор модели доступен только на опубликованных публичном и административном сайтах.'],
+  'The selected analysis model is not configured. Please try again later.': ['מודל הניתוח שנבחר אינו מוגדר. יש לנסות שוב מאוחר יותר.', 'Выбранная модель анализа не настроена. Повторите попытку позже.'],
+  'Reasoning settings are available for administrator Grok 4.7 only.': ['הגדרות עומק החשיבה זמינות רק למנהל במודל Grok 4.7.', 'Настройки глубины рассуждений доступны только администратору для Grok 4.7.'],
   'Choose a valid interface language.': ['יש לבחור שפת ממשק תקינה.', 'Выберите поддерживаемый язык интерфейса.'],
   'This host is not allowed.': ['הגישה מהמארח הזה אינה מורשית.', 'Доступ с этого хоста запрещён.'],
   'Enter text or a public article URL to analyze.': ['יש להזין טקסט או קישור למאמר ציבורי לניתוח.', 'Введите текст или ссылку на общедоступную статью для анализа.'],
@@ -11,6 +17,7 @@ const messages = {
   'Text must be 30,000 characters or fewer.': ['הטקסט חייב להכיל עד 30,000 תווים.', 'Текст должен содержать не более 30 000 символов.'],
   'The client address could not be verified.': ['לא ניתן לאמת את כתובת הלקוח.', 'Не удалось проверить адрес клиента.'],
   'Too many analyses. Please try again later.': ['בוצעו יותר מדי ניתוחים. יש לנסות שוב מאוחר יותר.', 'Слишком много анализов. Повторите попытку позже.'],
+  'Daily analysis limit reached. Please try again later.': ['מכסת הניתוחים ל־24 שעות מוצתה. יש לנסות שוב מאוחר יותר.', 'Достигнут лимит анализов за 24 часа. Повторите попытку позже.'],
   'The analyzer is busy. Please try again shortly.': ['כלי הניתוח עמוס. יש לנסות שוב בעוד זמן קצר.', 'Сервис анализа занят. Повторите попытку чуть позже.'],
   'The submitted text is too large.': ['הטקסט שנשלח גדול מדי.', 'Отправленный текст слишком большой.'],
   'The request could not be read.': ['לא ניתן לקרוא את הבקשה.', 'Не удалось прочитать запрос.'],

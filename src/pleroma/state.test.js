@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { explorerSearch, readExplorerRoute } from './state.js';
 
-const noOverlays = { paired: false, planets: false, torus: false };
+const noOverlays = { paired: false, planets: false, torus: false, tarot: false, astrology: false };
 
 test('empty links retain analyzer entry and use the caller’s responsive mode default', () => {
   assert.deepEqual(readExplorerRoute(''), {
-    view: 'analyze', tradition: 'john', node: null, mode: '3d', overlays: noOverlays,
+    view: 'analyze', tradition: 'john', node: null, path: null, mode: '3d', overlays: noOverlays,
   });
   assert.equal(readExplorerRoute('?view=pleroma', '2d').mode, '2d');
   assert.equal(readExplorerRoute('?view=pleroma&mode=3d', '2d').mode, '3d');
@@ -14,8 +14,8 @@ test('empty links retain analyzer entry and use the caller’s responsive mode d
 
 test('a shared deep link restores its selected entity, rendering mode, and supported overlays', () => {
   assert.deepEqual(readExplorerRoute('?view=pleroma&tradition=john&node=sophia&mode=2d&overlays=paired,planets'), {
-    view: 'pleroma', tradition: 'john', node: 'sophia', mode: '2d',
-    overlays: { paired: true, planets: true, torus: false },
+    view: 'pleroma', tradition: 'john', node: 'sophia', path: null, mode: '2d',
+    overlays: { ...noOverlays, paired: true, planets: true },
   });
 });
 
@@ -33,17 +33,17 @@ test('malformed route fields fall back safely without accepting arbitrary node s
 
 test('overlays cannot leak across traditions or enable unknown interpretations', () => {
   const expected = {
-    john: { paired: true, planets: true, torus: false },
-    ezekiel: { paired: false, planets: false, torus: true },
-    tree: noOverlays,
+    john: { ...noOverlays, paired: true, planets: true },
+    ezekiel: { ...noOverlays, torus: true },
+    tree: { ...noOverlays, tarot: true, astrology: true },
     plotinus: noOverlays,
   };
   for (const [tradition, overlays] of Object.entries(expected)) {
-    const query = `?view=pleroma&tradition=${tradition}&overlays=paired,planets,torus,unknown,paired`;
+    const query = `?view=pleroma&tradition=${tradition}&overlays=paired,planets,torus,tarot,astrology,unknown,paired`;
     assert.deepEqual(readExplorerRoute(query).overlays, overlays, tradition);
     const serialized = explorerSearch('', {
       view: 'pleroma', tradition, node: null, mode: '3d',
-      overlays: { paired: true, planets: true, torus: true, unknown: true },
+      overlays: { paired: true, planets: true, torus: true, tarot: true, astrology: true, unknown: true },
     });
     assert.deepEqual(readExplorerRoute(serialized).overlays, overlays, tradition);
     assert.ok(!new URLSearchParams(serialized).get('overlays')?.includes('unknown'));
@@ -52,10 +52,10 @@ test('overlays cannot leak across traditions or enable unknown interpretations',
 
 test('serialization round-trips independent history entries for every tradition', () => {
   const entries = [
-    { view: 'pleroma', tradition: 'john', node: 'sophia', mode: '3d', overlays: { ...noOverlays, paired: true } },
-    { view: 'pleroma', tradition: 'ezekiel', node: 'throne', mode: '2d', overlays: { ...noOverlays, torus: true } },
-    { view: 'pleroma', tradition: 'tree', node: 'keter', mode: '3d', overlays: { ...noOverlays } },
-    { view: 'pleroma', tradition: 'plotinus', node: 'one', mode: '2d', overlays: { ...noOverlays } },
+    { view: 'pleroma', tradition: 'john', node: 'sophia', path: null, mode: '3d', overlays: { ...noOverlays, paired: true } },
+    { view: 'pleroma', tradition: 'ezekiel', node: 'throne', path: null, mode: '2d', overlays: { ...noOverlays, torus: true } },
+    { view: 'pleroma', tradition: 'tree', node: 'keter', path: null, mode: '3d', overlays: { ...noOverlays } },
+    { view: 'pleroma', tradition: 'plotinus', node: 'one', path: null, mode: '2d', overlays: { ...noOverlays } },
   ];
   const links = [];
   let search = '?campaign=atlas';
@@ -89,14 +89,14 @@ test('feature navigation preserves unrelated query parameters, including repeate
 test('returning to Analyze removes only the explorer’s parameters', () => {
   const search = explorerSearch('?view=pleroma&tradition=john&node=sophia&mode=3d&overlays=paired&campaign=atlas&filter=one&filter=two', { view: 'analyze' });
   const params = new URLSearchParams(search);
-  for (const key of ['view', 'tradition', 'node', 'mode', 'overlays']) assert.equal(params.has(key), false, key);
+  for (const key of ['view', 'tradition', 'node', 'path', 'mode', 'overlays']) assert.equal(params.has(key), false, key);
   assert.deepEqual([...params], [['campaign', 'atlas'], ['filter', 'one'], ['filter', 'two']]);
   assert.equal(explorerSearch('?view=pleroma&node=sophia', { view: 'analyze' }), '');
 });
 
 test('the closed-inspector sentinel survives reloads and remains distinct from an unspecified selection', () => {
   const closed = {
-    view: 'pleroma', tradition: 'john', node: 'none', mode: '2d', overlays: noOverlays,
+    view: 'pleroma', tradition: 'john', node: 'none', path: null, mode: '2d', overlays: noOverlays,
   };
   const serialized = explorerSearch('', closed);
   assert.equal(new URLSearchParams(serialized).get('node'), 'none');
@@ -122,4 +122,18 @@ test('a malformed tradition normalizes consistently when reading and writing a l
     overlays: { paired: true, planets: true, torus: true },
   });
   assert.deepEqual(readExplorerRoute(rewritten), incoming);
+});
+
+test('correspondence deep links accept only visible paths and retain unrelated parameters', () => {
+  const path = readExplorerRoute('?view=pleroma&tradition=tree&overlays=tarot&path=hermetic-path-15&campaign=mint');
+  assert.equal(path.path, 'hermetic-path-15');
+  const serialized = explorerSearch('?campaign=mint&path=stale', path);
+  assert.deepEqual(readExplorerRoute(serialized), path);
+  assert.equal(new URLSearchParams(serialized).get('campaign'), 'mint');
+  for (const suffix of ['&overlays=tarot&path=hermetic-sphere-3', '&path=hermetic-path-15', '&overlays=astrology&path=hermetic-path-99', '&overlays=tarot&path=%3Cscript%3E']) {
+    assert.equal(readExplorerRoute('?view=pleroma&tradition=tree' + suffix).path, null);
+  }
+  assert.equal(readExplorerRoute('?view=pleroma&tradition=tree&overlays=astrology&path=hermetic-sphere-3').path, 'hermetic-sphere-3');
+  assert.equal(readExplorerRoute('?view=pleroma&tradition=john&overlays=tarot&path=hermetic-path-15').path, null);
+  assert.equal(explorerSearch(serialized, { view: 'analyze' }), '?campaign=mint');
 });

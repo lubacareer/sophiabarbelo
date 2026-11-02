@@ -51,9 +51,12 @@ test('the backend rejects public listeners whether or not proxy authentication i
     const child = spawnSync(process.execPath, ['server/index.js'], {
       cwd: path.resolve('.'),
       env: { ...process.env, SOPHIA_PROXY_SECRET: secret, HOST: '0.0.0.0', PORT: '3001' },
-      encoding: 'utf8', timeout: 5000,
+      // Full-suite Windows runs load the server's module graph concurrently.
+      // Allow startup contention while still bounding an accidentally live server.
+      encoding: 'utf8', timeout: 15_000,
     });
-    assert.notEqual(child.status, 0);
+    assert.ifError(child.error);
+    assert.equal(child.status, 1);
     assert.match(child.stderr, /HOST must be a loopback address/);
   }
 });
