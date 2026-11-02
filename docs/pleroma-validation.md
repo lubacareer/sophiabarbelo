@@ -1,5 +1,29 @@
 # Pleroma 3D validation
 
+## Hebrew and Russian font update — 2026-11-02
+
+Fredoka now renders Hebrew and M PLUS Rounded 1c renders Russian/Cyrillic across
+the analyzer, explorer, source inspector, personal editor, and SVG/WebGL labels.
+Nunito remains the Latin font. Script-specific local WOFF2 files total 77,584
+bytes; the supplied original files and archives remain untouched. Licenses,
+coverage, and derivation details are in [font notes](../src/fonts/README.md).
+
+- Twelve public/admin × 1280/390/320px × Hebrew/Russian browser cases passed.
+  Chrome's rendered-font inspection confirmed the intended embedded fonts in
+  192 samples, including controls, results, both diagram modes, and mixed notes.
+- English-interface checks on both roles confirmed Hebrew source passages still
+  use Fredoka and mixed personal notes use Fredoka, M PLUS Rounded, and Nunito
+  according to their script. Unsupported biblical marks retain system fallback;
+  no source characters were altered.
+- Language switches, reloads, keyboard focus, real overlay-menu clicks, and
+  responsive wrapping passed without horizontal overflow or page errors.
+  Browser skill was unavailable; installed Playwright/Chrome used local fixtures
+  at ports 6181/6182. Twelve fixture analyses made no live provider calls, and no
+  external font requests occurred. Refreshed Hebrew/Russian screenshots below
+  show the new fonts.
+- Local tests: 238 passed, eight Redis cases skipped; production build and
+  `git diff --check` passed. The existing lazy 3D bundle warning remains.
+
 ## Symbolic exploration revision — 2026-11-02
 
 The current screenshots show bright grass-green controls and translucent mint

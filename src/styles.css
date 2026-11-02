@@ -14,15 +14,63 @@
   font-display: swap;
 }
 
+/* Select by script, including source passages and notes in a different UI language. */
+@font-face {
+  font-family: 'Fredoka';
+  src: url('./fonts/Fredoka/Fredoka-Hebrew-Variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  unicode-range: U+0590-05FF, U+FB1D-FB4F;
+}
+
+@font-face {
+  font-family: 'M PLUS Rounded 1c';
+  src: url('./fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0300-036F, U+0400-052F;
+}
+
+@font-face {
+  font-family: 'M PLUS Rounded 1c';
+  src: url('./fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Medium.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0300-036F, U+0400-052F;
+}
+
+@font-face {
+  font-family: 'M PLUS Rounded 1c';
+  src: url('./fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Bold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+0300-036F, U+0400-052F;
+}
+
+@font-face {
+  font-family: 'M PLUS Rounded 1c';
+  src: url('./fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-ExtraBold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  unicode-range: U+0300-036F, U+0400-052F;
+}
+
 :root {
-  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+  --font-rounded: 'Fredoka', 'M PLUS Rounded 1c', 'Nunito';
+  --font-ui: var(--font-rounded), Arial, sans-serif;
+  --font-symbol: var(--font-rounded), 'Segoe UI Symbol', sans-serif;
+  font-family: var(--font-ui);
   color: #173d30;
   background: #dcf7ce;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
-:root[lang='he'] { font-family: 'Nunito', Arial, sans-serif; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -38,9 +86,9 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: wa
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible, .annotated-source:focus-visible, .finding:focus { outline: 3px solid #2a785b; outline-offset: 3px; }
 a { color: #17664d; overflow-wrap: anywhere; }
 
-.site-nav { display: flex; align-items: center; min-height: 56px; padding: 0 40px; gap: 28px; border-bottom: 1px solid #a8c9b1; color: #183d2c; background: #cee7d7e8; font-family: 'Nunito', Arial, sans-serif; }
+.site-nav { display: flex; align-items: center; min-height: 56px; padding: 0 40px; gap: 28px; border-bottom: 1px solid #a8c9b1; color: #183d2c; background: #cee7d7e8; font-family: var(--font-ui); }
 .site-nav button { border: 0; border-radius: 0; background: transparent; color: inherit; }
-.site-brand { padding: 0; font: 800 25px/1.3 'Nunito', 'Trebuchet MS', sans-serif; white-space: nowrap; }
+.site-brand { padding: 0; font: 800 25px/1.3 var(--font-ui); white-space: nowrap; }
 .site-nav nav { display: flex; align-self: stretch; margin: 0 auto; gap: 24px; }
 .site-nav nav button { border-bottom: 2px solid transparent; padding: 11px 8px; font-size: 15px; }
 .site-nav nav button[aria-current='page'] { border-color: #3c7758; font-weight: 800; }
@@ -171,7 +219,6 @@ blockquote { margin: 8px 0 0; padding: 9px 12px; border-radius: 10px; background
 .finding { scroll-margin-top: 18px; }
 .analyze-button { flex-shrink: 0; }
 .finding-heading { flex-wrap: wrap; }
-[dir='rtl'] { font-family: Arial, 'Nunito', sans-serif; }
 
 @media (max-width: 700px) {
   .site-nav { padding: 12px 20px 0; flex-wrap: wrap; gap: 8px 12px; min-height: 95px; }

@@ -6,7 +6,7 @@ Current implementation references:
 - [Mobile screenshot](images/pleroma-mobile.png)
 
 These repository screenshots capture the bright grass-green revision with
-translucent mint surfaces and Nunito. Desktop shows the Tree in 3D with the
+translucent mint surfaces and rounded typography. Desktop shows the Tree in 3D with the
 Hermetic overlays; mobile shows the same correspondences in Hebrew and 2D.
 The screenshots document the visualization treatment; source records
 and deterministic layouts supply the diagrams and their source-based topology.
@@ -16,9 +16,14 @@ and deterministic layouts supply the diagrams and their source-based topology.
 UI surfaces use the analyzer's generated book-of-wisdom background and translucent
 bright grass-tinted mint panels, borders #9cce84, headings #173d30, body #254638,
 lime selected controls #7bec52, and structural green #286d32. Rounded controls, menus, and reading
-surfaces follow the analyzer's visual language. Use local Nunito throughout,
-including headings, source quotations, and diagram labels, with sans-serif
-fallbacks for glyphs outside the bundled font. The reading inspector uses mint
+surfaces follow the analyzer's visual language. Use local Fredoka for Hebrew,
+M PLUS Rounded 1c for Russian/Cyrillic, and Nunito for Latin text, including
+headings, source quotations, controls, personal notes, and diagram labels.
+Script-specific webfonts also apply to mixed-language passages, independently
+of the interface language. Keep sans-serif fallbacks for glyphs outside the
+supplied fonts, including rare biblical cantillation marks. Font licenses and
+derivation details are in [the font notes](../src/fonts/README.md).
+The reading inspector uses mint
 glass and an 18px backdrop blur, matching the analyzer's rhetoric panels.
 
 The visualization retains its explicit deep evergreen #081713 canvas, existing

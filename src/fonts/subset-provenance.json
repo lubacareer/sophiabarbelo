@@ -1,0 +1,62 @@
+{
+  "tool": "fontTools 4.63.0 (installed Brotli backend)",
+  "method": "Script-only subset; preserve OpenType layout and font name/license metadata. Fredoka width axis fixed at normal (100), weight axis retained. Original user files unchanged.",
+  "fonts": [
+    {
+      "file": "src/fonts/Fredoka/Fredoka-Hebrew-Variable.woff2",
+      "bytes": 7952,
+      "source": "assets/fonts/Fredoka/Fredoka-VariableFont_wdth,wght.ttf",
+      "sourceSha256": "638482f81fcecafbbcffe5f06531cbb25586e7bcf31f78b3edd0980d84c0d3de",
+      "unicodeRange": "U+05B0-05BC, U+05BE-05BF, U+05C1-05C2, U+05C7, U+05D0-05EA, U+05F3-05F4, U+FB2A-FB36, U+FB38-FB3C, U+FB3E, U+FB40-FB41, U+FB43-FB44, U+FB46-FB4B",
+      "glyphCount": 78,
+      "unicodeCount": 76,
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 300.0,
+          "max": 700.0
+        }
+      ]
+    },
+    {
+      "file": "src/fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Regular.woff2",
+      "bytes": 17464,
+      "source": "assets/fonts/MPlusRounded/MPLUSRounded1c-Regular.ttf",
+      "sourceSha256": "20675c35244fe1d0f142c91b13761bbb0cfb4f47e584206ecf07e12cc70fb7db",
+      "unicodeRange": "U+0300-0347, U+0351-0353, U+0357-0358, U+035C-035F, U+0361, U+0400-0463, U+046E-0481, U+0483-0486, U+048A-04A7, U+04AA-0513, U+051A-051D",
+      "glyphCount": 349,
+      "unicodeCount": 346,
+      "axes": []
+    },
+    {
+      "file": "src/fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Medium.woff2",
+      "bytes": 17324,
+      "source": "assets/fonts/MPlusRounded/MPLUSRounded1c-Medium.ttf",
+      "sourceSha256": "eb0a4d475a4d9c0438b11c3d58f302fe465e15b570132569b2d4dc12617b3309",
+      "unicodeRange": "U+0300-0347, U+0351-0353, U+0357-0358, U+035C-035F, U+0361, U+0400-0463, U+046E-0481, U+0483-0486, U+048A-04A7, U+04AA-0513, U+051A-051D",
+      "glyphCount": 349,
+      "unicodeCount": 346,
+      "axes": []
+    },
+    {
+      "file": "src/fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-Bold.woff2",
+      "bytes": 17364,
+      "source": "assets/fonts/MPlusRounded/MPLUSRounded1c-Bold.ttf",
+      "sourceSha256": "7cc22dbfebb98959d01f4dd86efcb8283ee9754319bfecb03e222ccfa82c65fb",
+      "unicodeRange": "U+0300-0347, U+0351-0353, U+0357-0358, U+035C-035F, U+0361, U+0400-0463, U+046E-0481, U+0483-0486, U+048A-04A7, U+04AA-0513, U+051A-051D",
+      "glyphCount": 349,
+      "unicodeCount": 346,
+      "axes": []
+    },
+    {
+      "file": "src/fonts/MPlusRounded/MPLUSRounded1c-Cyrillic-ExtraBold.woff2",
+      "bytes": 17480,
+      "source": "assets/fonts/MPlusRounded/MPLUSRounded1c-ExtraBold.ttf",
+      "sourceSha256": "c230a2d30c13324e51057071cd335f99d43bcb99ff6b1816a9455d1a86e13f39",
+      "unicodeRange": "U+0300-0347, U+0351-0353, U+0357-0358, U+035C-035F, U+0361, U+0400-0463, U+046E-0481, U+0483-0486, U+048A-04A7, U+04AA-0513, U+051A-051D",
+      "glyphCount": 349,
+      "unicodeCount": 346,
+      "axes": []
+    }
+  ]
+}

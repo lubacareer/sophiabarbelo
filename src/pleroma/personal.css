@@ -1,11 +1,11 @@
-.personal-connections { margin: 20px clamp(16px, 3.5vw, 40px) 28px; padding: clamp(18px, 3vw, 28px); border: 1px solid #9cce84; border-radius: 22px; background: rgb(210 246 190 / 78%); backdrop-filter: blur(18px); color: #254638; min-width: 0; font-family: 'Nunito', Arial, sans-serif; }
+.personal-connections { margin: 20px clamp(16px, 3.5vw, 40px) 28px; padding: clamp(18px, 3vw, 28px); border: 1px solid #9cce84; border-radius: 22px; background: rgb(210 246 190 / 78%); backdrop-filter: blur(18px); color: #254638; min-width: 0; font-family: var(--font-ui); }
 .personal-heading { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
 .personal-heading h2 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 800; }
 .personal-heading > span, .personal-optional { color: #254638; font-size: 14px; font-weight: 500; }
 .personal-connections p { line-height: 1.65; overflow-wrap: anywhere; }
 .personal-privacy { color: #254638; font-size: 14px; max-width: 85ch; }
 .personal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.personal-connections .personal-actions button, .personal-connections .personal-select { border: 1px solid #93baa2; border-radius: 12px; background: #dcf7ce; color: #174b35; min-height: 44px; padding: 9px 16px; font: 700 15px/1.4 'Nunito', Arial, sans-serif; overflow-wrap: anywhere; cursor: pointer; }
+.personal-connections .personal-actions button, .personal-connections .personal-select { border: 1px solid #93baa2; border-radius: 12px; background: #dcf7ce; color: #174b35; min-height: 44px; padding: 9px 16px; font: 700 15px/1.4 var(--font-ui); overflow-wrap: anywhere; cursor: pointer; }
 .personal-connections .personal-actions button:first-child { background: #7bec52; border-color: #286d32; color: #173d30; }
 .personal-connections .personal-actions button:disabled { opacity: .55; cursor: default; }
 .personal-connections button:focus-visible, .personal-connections input:focus-visible, .personal-connections select:focus-visible, .personal-connections textarea:focus-visible { outline: 2px solid #286d32; outline-offset: 3px; }
@@ -15,7 +15,7 @@
 .personal-form h3 { font-size: 22px; font-weight: 800; }
 .personal-form label { display: block; min-width: 0; font-size: 15px; font-weight: 700; line-height: 1.5; }
 .personal-form label:has(textarea) { grid-column: 1 / -1; }
-.personal-form input, .personal-form select, .personal-form textarea { display: block; width: 100%; min-width: 0; max-width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #86ae95; border-radius: 12px; background: rgb(237 255 222 / 80%); color: #254638; font: 500 16px/1.5 'Nunito', Arial, sans-serif; }
+.personal-form input, .personal-form select, .personal-form textarea { display: block; width: 100%; min-width: 0; max-width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #86ae95; border-radius: 12px; background: rgb(237 255 222 / 80%); color: #254638; font: 500 16px/1.5 var(--font-ui); }
 .personal-form textarea { resize: vertical; }
 .personal-status { min-height: 1.3em; margin: 10px 0; color: #173d30; font-size: 14px; }
 .personal-warning, .personal-error { border: 1px solid #9fba85; border-radius: 12px; padding: 10px 14px; background: #f1f5db; color: #384a20; }
