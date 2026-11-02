@@ -2,6 +2,16 @@
 
 Verified on November 2, 2026 for PR #7. Provider credentials remain outside the repository.
 
+## Gemini API-credit activation after billing setup
+
+The initial free-only Gemini configuration below is historical. The user subsequently linked billing, prepaid funds, applied eligible Ultra/Developer Program credits, and explicitly authorized Gemini API-credit usage on both public and administrator sites. This is billed API access offset by available credits, not an unbilled Free Tier project.
+
+- Both PR-specific Preview environments now set `SOPHIA_GEMINI_COSTS_CONFIRMED=true` while retaining `SOPHIA_GEMINI_FREE_CONFIRMED=false`. Existing Gemini and Tavily secrets were reused. Both fresh previews show Gemini enabled with the API credits label; the response/config schemas and localized UI messages are unchanged.
+- The Gemini model-lookup endpoint returned HTTP 200 with the saved key. After the new cost authorization, exactly two additional short Gemini end-to-end smoke analyses were run, one per domain, using the same Earth-orbit sample. Both returned Gemini-attributed results and research links. Public sources included [NASA's Earth fact sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html); administrator sources included [the University of Tennessee's discussion of years](http://csep10.phys.utk.edu/OJTA2dev/ojta/c1c/sky/time/years_tl.html) and [Time and Date's tropical year explanation](https://www.timeanddate.com/astronomy/tropical-year.html). No predetermined finding was required and no model fallback was used.
+- [Checks on API-credit activation](https://github.com/lubacareer/sophiabarbelo/actions/runs/41460883993): **210 tests passed, zero skipped**, including real Redis integration; the production build passed. Local full suite: 198 passed, eight Redis tests skipped because the Docker engine is unavailable. `git diff --check` passed.
+- Tests preserve the confirmed-free path and cover paid-only activation on both roles, paid precedence when both confirmations are true, absent/malformed confirmations, mandatory Gemini/Tavily prerequisites, and rejection of client-supplied cost acknowledgments. The server publishes no balances, billing IDs, or credentials.
+- Matching Production flags are staged for the next Git deployment. Public quotas, Tavily's free-only guard, provider deadlines, authentication/protection, billing and auto-reload settings remain unchanged. Older immutable preview URLs retain their previous configuration. PR #7 is unmerged and there have been no manual deployments.
+
 ## Shared extraction and analysis deadline correction
 
 - Both deployed roles now start a 280-second monotonic work deadline at the analysis handler, before quota acquisition and URL extraction. A 250-second extraction leaves at most 30 seconds for research; standalone research retains its 240-second cap. The Vercel function limit remains 300 seconds and public leases remain 330 seconds.
