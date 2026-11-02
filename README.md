@@ -57,6 +57,8 @@ The article extractor's `jsdom` dependency needs Node's support for `require()` 
 
 The chosen model receives each request; no deployed request automatically falls back to another model or to Groq. `SOPHIA_PUBLIC_PROVIDER` and deployed Groq settings are legacy variables ignored by this version. Existing API clients that omit `modelId` use Luna on both deployed roles. Local and Caddy runs retain `ANALYSIS_PROVIDER` behavior.
 
+See the [validation and activation notes](docs/model-picker-validation.md) for the tested provider outcomes and any disabled choices.
+
 Public requests use shared Redis allowances of **five admitted analysis attempts per 10-minute window** and **30 per 24-hour window**, with at most **two concurrent analyses per client** and **three across the public site**. Each window starts with its first admitted attempt and keeps its own expiry. A client is one public IPv4 address or IPv6 `/64` network, so visitors on the same network can share an allowance. The existing research settings and input allowance remain in use.
 
 Extraction and provider failures count as admitted attempts; requests rejected by initial input validation or quota/capacity checks do not. Exhausted allowances return HTTP 429 with `Retry-After`; the daily allowance has a distinct localized message. The service fails closed if Redis is unavailable. Redis stores hashed network quota identifiers, counters, and temporary leases for up to 24 hours; it does not store submitted text or analysis results. The administrator project bypasses those application limits but remains subject to provider and hosting limits.
