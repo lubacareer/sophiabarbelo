@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from './app.js';
+import { modelEnvironment } from '../test-support/models.js';
 import { createSharedLimiter, PUBLIC_LIMITS } from './shared-limiter.js';
 import { AppError } from './errors.js';
 
@@ -79,7 +80,7 @@ test('public daily exhaustion returns its retry time without starting work', asy
     acquisitions++;
     return { ok: true, json: async () => ({ result: [3, 43_210] }) };
   } });
-  const app = createApp({ deployment: 'public', sharedLimiter, analyze: async () => { analyses++; return emptyResult; } });
+  const app = createApp({ deployment: 'public', modelEnvironment, sharedLimiter, analyze: async () => { analyses++; return emptyResult; } });
   await withServers([app], async ([base]) => {
     const response = await post(base, '192.0.2.1');
     assert.equal(response.status, 429);
@@ -100,7 +101,7 @@ test('public instances share a limiter and ignore Caddy identity headers', async
     entries.set(key, count + 1);
     return async () => {};
   } };
-  const apps = [createApp({ deployment: 'public', sharedLimiter: limiter, analyze: async () => emptyResult }), createApp({ deployment: 'public', sharedLimiter: limiter, analyze: async () => emptyResult })];
+  const apps = [createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter, analyze: async () => emptyResult }), createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter, analyze: async () => emptyResult })];
   await withServers(apps, async ([first, second]) => {
     const spoof = { 'x-sophia-admin': '1', 'x-sophia-client-ip': '203.0.113.2', authorization: 'Bearer pretend-secret' };
     for (let i = 0; i < PUBLIC_LIMITS.burstCount; i++) assert.equal((await post(i % 2 ? first : second, i % 2 ? '2001:db8::1' : '2001:db8::2', spoof)).status, 200);
@@ -120,7 +121,7 @@ test('public analysis holds and releases capacity after success and error', asyn
     active++;
     return async () => { active--; };
   } };
-  const apps = [createApp({ deployment: 'public', sharedLimiter: limiter, analyze: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }), createApp({ deployment: 'public', sharedLimiter: limiter, analyze: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) })];
+  const apps = [createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter, analyze: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }), createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter, analyze: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) })];
   await withServers(apps, async ([first, second]) => {
     const requests = [];
     for (const [index, base] of [first, second, first].entries()) {

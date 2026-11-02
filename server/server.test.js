@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createApp } from './app.js';
+import { modelEnvironment } from '../test-support/models.js';
 import { extractArticle, isPublicAddress, parsePublicUrl, resolvePublic } from './article.js';
 import { analyzeWithGrok } from './grok.js';
 import { AppError } from './errors.js';
@@ -29,6 +30,57 @@ test('API validates input and routes text and URLs', async () => {
     assert.deepEqual((await post(base, { type: 'url', content: 'https://example.org/article' })).body.limitations, ['Article text']);
     assert.deepEqual(seen, ['https://example.org/article']);
   });
+});
+
+test('deployed API validates model selection and configuration before quota or URL extraction', async () => {
+  let acquisitions = 0;
+  let extractions = 0;
+  let analyses = 0;
+  const environment = { ...modelEnvironment, GEMINI_API_KEY: undefined };
+  const app = createApp({
+    deployment: 'public', modelEnvironment: environment,
+    sharedLimiter: { acquire: async () => { acquisitions++; return async () => {}; } },
+    extract: async () => { extractions++; return 'Article text'; },
+    analyze: async () => { analyses++; return { claims: [], rhetoric: [], limitations: [], analysisModelId: 'untrusted-model' }; },
+  });
+  await withServer(app, async (base) => {
+    const send = (body) => fetch(`${base}/api/analyze`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.1' }, body: JSON.stringify({ type: 'url', content: 'https://example.org/article', ...body }) });
+    for (const modelId of ['', null, 1, [], {}, 'groq', 'openai/gpt-oss-120b', 'unrecognized']) assert.equal((await send({ modelId })).status, 400);
+    for (const modelId of ['luna', 'glm-4.7-flash', 'grok-4.7']) assert.equal((await send({ modelId, reasoningEffort: 'high' })).status, 400);
+    assert.equal((await send({ modelId: 'gemini-3.8-flash' })).status, 503);
+    assert.deepEqual([acquisitions, extractions, analyses], [0, 0, 0]);
+    const response = await send({});
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).analysisModelId, 'luna');
+    assert.deepEqual([acquisitions, extractions, analyses], [1, 1, 1]);
+  });
+});
+
+test('configuration and model reasoning follow createApp deployment rather than environment markers or request headers', async () => {
+  for (const deployment of ['public', 'admin', 'local']) {
+    const seen = [];
+    const app = createApp({
+      deployment, modelEnvironment: { ...modelEnvironment, VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: deployment === 'admin' ? 'public' : 'admin', ANALYSIS_PROVIDER: 'groq' },
+      sharedLimiter: { acquire: async () => async () => {} },
+      analyze: async (_text, options) => { seen.push(options); return { claims: [], rhetoric: [], limitations: [] }; },
+    });
+    await withServer(app, async (base) => {
+      const config = await (await fetch(`${base}/api/config`, { headers: { 'x-sophia-admin': '1' } })).json();
+      assert.equal(config.reasoningControls, false);
+      if (deployment === 'local') assert.equal(Object.hasOwn(config, 'models'), false);
+      else {
+        assert.equal(config.defaultModelId, 'luna');
+        assert.deepEqual(config.models.filter((model) => model.reasoningControls).map((model) => model.id), deployment === 'admin' ? ['grok-4.7'] : []);
+      }
+      const response = await fetch(`${base}/api/analyze`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.1', 'x-sophia-admin': '1' },
+        body: JSON.stringify({ type: 'text', content: 'Claim', modelId: 'grok-4.7', reasoningEffort: 'high' }),
+      });
+      assert.equal(response.status, deployment === 'admin' ? 200 : 400);
+      assert.equal(seen.length, deployment === 'admin' ? 1 : 0);
+      if (deployment === 'admin') assert.equal(seen[0].reasoningEffort, 'high');
+    });
+  }
 });
 
 test('API validates and forwards the optional reasoning setting', async () => {

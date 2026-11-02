@@ -5,6 +5,7 @@ import { createConnection } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createSharedLimiter } from './shared-limiter.js';
 import { createApp } from './app.js';
+import { modelEnvironment } from '../test-support/models.js';
 
 // Opt in only to an explicitly selected Redis on loopback. Never use the app's
 // Redis URL/token, a remote service, or a real analysis provider in these tests.
@@ -280,19 +281,26 @@ function post(base, ip, extra = {}, body = { type: 'text', content: 'A local tes
 
 const emptyResult = { claims: [], rhetoric: [], limitations: [] };
 
-test('public HTTP instances share actual Redis quotas by IPv6 /64 and ignore forged administrator headers; admin bypasses them', integration, async () => {
-  await withRedis(async ({ limiter, commands }) => {
-    const apps = ['public', 'public', 'admin'].map((deployment) => createApp({ deployment, sharedLimiter: limiter(), analyze: async () => emptyResult }));
+test('public HTTP instances share real Redis quota across all four models and IPv6 /64; forged admin headers cannot bypass it', integration, async () => {
+  await withRedis(async ({ limiter, commands, acquireCommand, counters }) => {
+    const apps = ['public', 'public', 'admin'].map((deployment) => createApp({ deployment, modelEnvironment, sharedLimiter: limiter(), analyze: async () => emptyResult }));
     await withServers(apps, async ([first, second, admin]) => {
       const spoof = { 'x-sophia-admin': '1', 'x-sophia-client-ip': '203.0.113.4', authorization: 'Bearer forged-test-secret' };
       for (const body of [{ type: 'text', content: 42 }, { type: 'url', content: 'http://127.0.0.1/private' }]) {
         assert.equal((await post(first, '2001:db8::1', spoof, body)).status, 400);
         assert.equal(commands.length, 0, 'Invalid bodies and rejected URLs must fail before any Redis EVAL.');
       }
-      for (let index = 0; index < 5; index++) assert.equal((await post(index % 2 ? first : second, `2001:db8::${index + 1}`, spoof)).status, 200);
-      const blocked = await post(first, '2001:db8::9', spoof);
+      const selections = ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7', 'luna'];
+      for (const [index, modelId] of selections.entries()) {
+        const response = await post(index % 2 ? first : second, `2001:db8::${index + 1}`, spoof, { type: 'text', content: 'A local test passage.', modelId });
+        assert.equal(response.status, 200);
+        assert.equal((await response.json()).analysisModelId, modelId);
+      }
+      const blocked = await post(first, '2001:db8::9', spoof, { type: 'text', content: 'A local test passage.', modelId: 'gemini-3.8-flash' });
       assert.equal(blocked.status, 429);
       assert.ok(Number(blocked.headers.get('retry-after')) >= 1);
+      assert.equal(new Set(commands.filter((command) => command.keys.length === 4).map((command) => command.keys[2])).size, 1, 'Model changes and addresses in one IPv6 /64 must use the same burst counter.');
+      assert.deepEqual(await counters(acquireCommand().keys), ['5', '5']);
       assert.equal((await post(second, '2001:db8:0:1::1', spoof)).status, 200);
       const commandCount = commands.length;
       for (let index = 0; index < 7; index++) assert.equal((await post(admin, '2001:db8::1')).status, 200);
@@ -307,7 +315,7 @@ test('public HTTP work holds real leases, releases them after success or failure
     const requests = [];
     const analyze = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
     const extract = async () => { throw new Error('Deliberate local extraction failure.'); };
-    const apps = [createApp({ deployment: 'public', sharedLimiter: limiter(), analyze }), createApp({ deployment: 'public', sharedLimiter: limiter(), analyze, extract })];
+    const apps = [createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter(), analyze }), createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter(), analyze, extract })];
     await withServers(apps, async ([first, second]) => {
       async function start(base, ip, expectedCount) {
         const request = post(base, ip);

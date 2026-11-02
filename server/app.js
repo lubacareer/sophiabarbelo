@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import net from 'node:net';
 import ipaddr from 'ipaddr.js';
 import { extractArticle, parsePublicUrl } from './article.js';
-import { analyzeConfigured, supportsReasoning } from './provider.js';
+import { analyzeConfigured, analysisConfiguration, resolveAnalysisModel } from './provider.js';
 import { createSharedLimiter } from './shared-limiter.js';
 import { AppError } from './errors.js';
 import { languages, localize, requestLanguage } from './localization.js';
@@ -37,8 +37,10 @@ function sameSecret(actual, expected) {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
-export function createApp({ extract = extractArticle, analyze = analyzeConfigured, proxySecret = process.env.SOPHIA_PROXY_SECRET, now = Date.now, deployment = 'local', sharedLimiter = createSharedLimiter() } = {}) {
+export function createApp({ extract = extractArticle, analyze, proxySecret = process.env.SOPHIA_PROXY_SECRET, now = Date.now, deployment = 'local', sharedLimiter = createSharedLimiter(), modelEnvironment = process.env } = {}) {
   if (!['local', 'public', 'admin'].includes(deployment)) throw new Error('Invalid deployment mode');
+  const context = { deployment, environment: modelEnvironment };
+  const runAnalysis = analyze || ((text, options) => analyzeConfigured(text, options, context));
   const app = express();
   const clients = new Map();
   let anonymousInFlight = 0;
@@ -57,7 +59,7 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
   });
   app.use(express.json({ limit: '256kb' }));
   app.get('/api/config', (_req, res, next) => {
-    try { res.set('Cache-Control', 'no-store').json({ reasoningControls: supportsReasoning() }); }
+    try { res.set('Cache-Control', 'no-store').json(analysisConfiguration(context)); }
     catch (error) { next(error); }
   });
   app.post('/api/analyze', async (req, res, next) => {
@@ -72,7 +74,7 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
       try { await releaseCurrent(); } catch { /* expiry handles cleanup */ }
     }
     try {
-      const { type, content, reasoningEffort, language } = req.body || {};
+      const { type, content, reasoningEffort, language, modelId } = req.body || {};
       if (language !== undefined && !languages.includes(language)) {
         throw new AppError(400, 'Choose a valid interface language.');
       }
@@ -86,6 +88,8 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
       if (value.length > (type === 'url' ? 2_048 : MAX_TEXT)) throw new AppError(400, type === 'url' ? 'The URL is too long.' : 'Text must be 30,000 characters or fewer.');
       // Reject URLs that are invalid without network access before allocating quota.
       if (type === 'url') parsePublicUrl(value);
+      // Selection is server-authorized before quota admission or extraction.
+      const selected = resolveAnalysisModel({ modelId, reasoningEffort }, context);
 
       if (deployment === 'public') {
         // Vercel overwrites X-Forwarded-For at its ingress. Never use the
@@ -131,9 +135,9 @@ export function createApp({ extract = extractArticle, analyze = analyzeConfigure
         }
       }
       const text = type === 'url' ? await extract(value) : value;
-      const result = await analyze(text, { reasoningEffort, ...(language !== undefined ? { language } : {}) });
+      const result = await runAnalysis(text, { reasoningEffort, ...(language !== undefined ? { language } : {}), ...(selected ? { modelId: selected.id } : {}) });
       await release();
-      res.set('Cache-Control', 'no-store').json({ ...result, sourceText: text });
+      res.set('Cache-Control', 'no-store').json({ ...result, ...(selected ? { analysisModelId: selected.id } : {}), sourceText: text });
     } catch (error) { await release(); next(error); }
     finally { if (acquired) anonymousInFlight--; }
   });

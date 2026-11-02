@@ -3,6 +3,10 @@ export const languages = ['en', 'he', 'ru'];
 // English messages remain the internal keys so existing callers and logs retain
 // their meaning. Translate only trusted application messages, never source text.
 const messages = {
+  'Choose a valid analysis model.': ['יש לבחור מודל ניתוח תקין.', 'Выберите допустимую модель анализа.'],
+  'Model selection is available on deployed public and administrator sites only.': ['בחירת מודל זמינה רק באתר הציבורי ובאתר המנהל הפרוסים.', 'Выбор модели доступен только на опубликованных публичном и административном сайтах.'],
+  'The selected analysis model is not configured. Please try again later.': ['מודל הניתוח שנבחר אינו מוגדר. יש לנסות שוב מאוחר יותר.', 'Выбранная модель анализа не настроена. Повторите попытку позже.'],
+  'Reasoning settings are available for administrator Grok 4.7 only.': ['הגדרות עומק החשיבה זמינות רק למנהל במודל Grok 4.7.', 'Настройки глубины рассуждений доступны только администратору для Grok 4.7.'],
   'Choose a valid interface language.': ['יש לבחור שפת ממשק תקינה.', 'Выберите поддерживаемый язык интерфейса.'],
   'This host is not allowed.': ['הגישה מהמארח הזה אינה מורשית.', 'Доступ с этого хоста запрещён.'],
   'Enter text or a public article URL to analyze.': ['יש להזין טקסט או קישור למאמר ציבורי לניתוח.', 'Введите текст или ссылку на общедоступную статью для анализа.'],
