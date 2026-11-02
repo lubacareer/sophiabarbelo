@@ -4,7 +4,6 @@ import { analyzeWithGrok, validatedResult } from './grok.js';
 import { createDeadline } from './deadline.js';
 import { AppError } from './errors.js';
 import { createApp } from './app.js';
-import { localize } from './localization.js';
 import { modelEnvironment } from '../test-support/models.js';
 
 const empty = () => ({ claims: [], rhetoric: [], limitations: [] });
@@ -148,6 +147,11 @@ test('Grok timeout diagnostics preserve request caps, shared-deadline precedence
 });
 
 test('public Grok request-cap expiry returns a localized 504 and releases its lease once', async (t) => {
+  const expectedTimeoutBodies = {
+    en: 'The analysis took too long. Please try again.',
+    he: 'הניתוח נמשך זמן רב מדי. יש לנסות שוב.',
+    ru: 'Анализ занял слишком много времени. Повторите попытку.',
+  };
   for (const phase of ['fetch', 'body']) for (const language of ['en', 'he', 'ru']) {
     const cap = new AbortController();
     const mock = t.mock.method(AbortSignal, 'timeout', () => cap.signal);
@@ -174,7 +178,7 @@ test('public Grok request-cap expiry returns a localized 504 and releases its le
         body: JSON.stringify({ type: 'text', content: 'הירח משקף אור.', modelId: 'grok-4.7', language, includeSymbolicReadings: true }),
       });
       assert.equal(response.status, 504);
-      assert.deepEqual(await response.json(), { error: localize('The analysis took too long. Please try again.', language) });
+      assert.deepEqual(await response.json(), { error: expectedTimeoutBodies[language] });
       assert.deepEqual([acquisitions, releases, providerCalls], [1, 1, 1]);
       assert.deepEqual(logs, [['Grok analysis request failed.', { phase, reason: 'timeout' }]]);
     } finally {
