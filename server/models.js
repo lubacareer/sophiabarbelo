@@ -15,13 +15,18 @@ function assertDeployment(deployment) {
   }
 }
 
+function geminiAccess(environment) {
+  // Paid activation takes precedence over a stale free-tier confirmation.
+  return environment.SOPHIA_GEMINI_COSTS_CONFIRMED === 'true' || environment.SOPHIA_GEMINI_FREE_CONFIRMED !== 'true' ? 'credits' : 'free';
+}
+
 function configured(model, deployment, environment) {
   const has = (name) => typeof environment[name] === 'string' && Boolean(environment[name].trim());
   const confirmed = (name) => environment[name] === 'true';
   if (model.provider === 'openai') return has('OPENAI_API_KEY') && confirmed('SOPHIA_OPENAI_COSTS_CONFIRMED');
   if (model.provider === 'xai') return has('XAI_API_KEY') && (deployment === 'admin' || confirmed('SOPHIA_PUBLIC_XAI_COSTS_CONFIRMED'));
   const tavily = has('TAVILY_API_KEY') && confirmed('SOPHIA_TAVILY_FREE_CONFIRMED');
-  if (model.provider === 'gemini') return tavily && has('GEMINI_API_KEY') && confirmed('SOPHIA_GEMINI_FREE_CONFIRMED');
+  if (model.provider === 'gemini') return tavily && has('GEMINI_API_KEY') && (confirmed('SOPHIA_GEMINI_FREE_CONFIRMED') || confirmed('SOPHIA_GEMINI_COSTS_CONFIRMED'));
   return tavily && has('CLOUDFLARE_API_TOKEN') && /^[a-f0-9]{32}$/i.test(environment.CLOUDFLARE_ACCOUNT_ID || '') && confirmed('SOPHIA_CLOUDFLARE_FREE_CONFIRMED');
 }
 
@@ -39,7 +44,7 @@ export function analysisConfiguration({ deployment = 'local', environment = proc
   return {
     models: models.map(({ id, label, access, ...model }) => {
       const available = configured(model, deployment, environment);
-      return { id, label, available, unavailableReason: available ? null : 'not_configured', reasoningControls: supportsReasoning({ deployment, modelId: id, environment }), access };
+      return { id, label, available, unavailableReason: available ? null : 'not_configured', reasoningControls: supportsReasoning({ deployment, modelId: id, environment }), access: model.provider === 'gemini' ? geminiAccess(environment) : access };
     }),
     defaultModelId: DEFAULT_MODEL_ID,
     reasoningControls: false,
@@ -68,5 +73,5 @@ export function resolveAnalysisModel(options = {}, { deployment = 'local', envir
   if (!configured(selected, deployment, environment)) {
     throw new AppError(503, 'The selected analysis model is not configured. Please try again later.');
   }
-  return selected;
+  return selected.provider === 'gemini' ? Object.freeze({ ...selected, access: geminiAccess(environment) }) : selected;
 }

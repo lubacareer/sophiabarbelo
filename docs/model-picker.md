@@ -5,19 +5,20 @@ The public and administrator Vercel projects offer the same fixed model catalog.
 | Picker choice / API ID | Fixed model | Research | Required server configuration |
 | --- | --- | --- | --- |
 | GPT-6 Luna / `luna` | OpenAI `gpt-6-luna` | OpenAI web search | `OPENAI_API_KEY`, `SOPHIA_OPENAI_COSTS_CONFIRMED=true` |
-| Gemini 3.8 Flash / `gemini-3.8-flash` | Google `gemini-3.8-flash` | Tavily | `GEMINI_API_KEY`, `SOPHIA_GEMINI_FREE_CONFIRMED=true`, plus Tavily below |
+| Gemini 3.8 Flash / `gemini-3.8-flash` | Google `gemini-3.8-flash` | Tavily | `GEMINI_API_KEY`, either `SOPHIA_GEMINI_FREE_CONFIRMED=true` or `SOPHIA_GEMINI_COSTS_CONFIRMED=true`, plus Tavily below |
 | GLM-4.7-Flash / `glm-4.7-flash` | Cloudflare `@cf/zai-org/glm-4.7-flash` | Tavily | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SOPHIA_CLOUDFLARE_FREE_CONFIRMED=true`, plus Tavily below |
 | Grok 4.7 / `grok-4.7` | xAI `grok-4.7` | xAI web search | `XAI_API_KEY`; public additionally requires `SOPHIA_PUBLIC_XAI_COSTS_CONFIRMED=true` |
 
 Both Tavily-backed choices require `TAVILY_API_KEY` and `SOPHIA_TAVILY_FREE_CONFIRMED=true`. API keys and tokens are Secrets, never `VITE_*` variables. Account IDs and confirmation flags are server-side configuration. Keep administrator deployment protection enabled. Public Grok uses fixed low effort; only administrator Grok exposes the reasoning-depth selector.
 
-## Verify free access before enabling it
+## Verify access and billing before enabling it
 
 - **Gemini:** create an API key in an unbilled project shown as Free Tier in AI Studio. Google AI Ultra increases AI Studio interface limits, but direct API billing is separate; eligible Cloud credit benefits are also separate from free-tier access. This adapter uses Gemini's REST Interactions API with `store:false` and no native Google Search tool. [Model capabilities](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash), [pricing](https://ai.google.dev/gemini-api/docs/pricing), [subscription benefits](https://ai.google.dev/gemini-api/docs/google-ai-plans).
+- **Gemini with API credits:** for a billed project, keep `SOPHIA_GEMINI_FREE_CONFIRMED=false` and set `SOPHIA_GEMINI_COSTS_CONFIRMED=true` only after authorizing API spending in that Vercel project. This opt-in applies equally to public visitor requests and administrator requests; configure each project separately. Eligible Ultra/Developer Program Cloud credits can offset usage, after which paid funds can be consumed. The picker displays API credits whenever this paid opt-in is true, including if the free flag is also true. With neither confirmation it remains disabled and labeled API credits. No balance, billing identifier, or key is exposed. This is a cost authorization, not a guarantee that an API request will succeed or that usage is free. [Gemini billing](https://ai.google.dev/gemini-api/docs/billing).
 - **Cloudflare:** verify the selected account uses Workers Free and create a token scoped to that account's Workers AI Read/Edit permissions. Use the direct Workers AI endpoint, without a paid AI Gateway route. The free allocation is 10,000 neurons per day; a Workers Paid account can bill overages. [Model](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/), [pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
 - **Tavily:** verify Researcher, PAYGO off, and remaining credits. Use a Development key; Tavily's Production key category requires a paid plan or PAYGO and is distinct from Vercel's Production environment. Researcher provides 1,000 monthly credits, and advanced search uses two credits per query. [Credits](https://docs.tavily.com/documentation/api-credits), [key limits](https://docs.tavily.com/documentation/rate-limits).
 
-Confirmations attest that these checks were completed; they do not monitor later account billing changes. Recheck them if provider plans or projects change. Exhausted free access returns an error rather than enabling billing, upgrading a plan, returning an unresearched answer, or switching providers.
+Confirmations attest that these checks were completed; they do not monitor later account billing changes. Recheck them if provider plans or projects change. The Gemini API-credit opt-in never changes Google billing or auto-reload settings. Both Gemini modes still require Tavily's verified free allowance. Exhausted free access returns an error rather than enabling billing, upgrading a plan, returning an unresearched answer, or switching providers.
 
 ## Research bounds and citations
 

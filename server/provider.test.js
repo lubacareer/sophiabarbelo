@@ -44,6 +44,7 @@ test('availability requires every provider credential and free/cost confirmation
       assert.deepEqual(config.models.find((model) => model.id === modelId), {
         ...analysisConfiguration(context('public')).models.find((model) => model.id === modelId),
         available: false, unavailableReason: 'not_configured',
+        ...(modelId === 'gemini-3.8-flash' && name === 'SOPHIA_GEMINI_FREE_CONFIRMED' ? { access: 'credits' } : {}),
       });
       assert.throws(() => resolveAnalysisModel({ modelId }, context('public', environment)), (error) => error.status === 503);
     }
@@ -53,6 +54,56 @@ test('availability requires every provider credential and free/cost confirmation
   assert.equal(analysisConfiguration(context('public', { ...modelEnvironment, CLOUDFLARE_ACCOUNT_ID: 'invalid-account' })).models.find((model) => model.id === 'glm-4.7-flash').available, false);
   assert.equal(analysisConfiguration(context('admin', { ...modelEnvironment, SOPHIA_OPENAI_COSTS_CONFIRMED: undefined })).models.find((model) => model.id === 'luna').available, false);
   for (const deployment of ['public', 'admin']) assert.ok(analysisConfiguration(context(deployment, {})).models.every((model) => !model.available));
+});
+
+test('Gemini supports explicit API-credit activation in both roles without a free-tier attestation', async () => {
+  for (const deployment of ['public', 'admin']) for (const free of [undefined, 'false', 'true']) {
+    const environment = { ...modelEnvironment, SOPHIA_GEMINI_FREE_CONFIRMED: free, SOPHIA_GEMINI_COSTS_CONFIRMED: 'true' };
+    const config = analysisConfiguration(context(deployment, environment));
+    const gemini = config.models.find((model) => model.id === 'gemini-3.8-flash');
+    assert.equal(gemini.available, true);
+    assert.equal(gemini.unavailableReason, null);
+    assert.equal(gemini.access, 'credits');
+    assert.equal(resolveAnalysisModel({ modelId: gemini.id }, context(deployment, environment)).access, 'credits');
+    assert.deepEqual(Object.keys(gemini).sort(), ['access', 'available', 'id', 'label', 'reasoningControls', 'unavailableReason'].sort());
+    let calls = 0;
+    const output = await analyzeConfigured('A claim', { modelId: gemini.id, language: 'he' }, {
+      ...context(deployment, environment), gemini: async (_text, options) => {
+        calls++;
+        assert.deepEqual(options, { language: 'he', model: 'gemini-3.8-flash', requireCitations: true });
+        return result();
+      },
+    });
+    assert.equal(calls, 1);
+    assert.equal(output.analysisModelId, gemini.id);
+  }
+});
+
+test('paid Gemini activation retains its key and free Tavily requirements in both roles', async () => {
+  for (const deployment of ['public', 'admin']) for (const name of ['GEMINI_API_KEY', 'TAVILY_API_KEY', 'SOPHIA_TAVILY_FREE_CONFIRMED']) {
+    for (const value of [undefined, '', ' ', ...(name.startsWith('SOPHIA_') ? ['false', 'TRUE', ' true ', true, 1] : [])]) {
+      const environment = { ...modelEnvironment, SOPHIA_GEMINI_FREE_CONFIRMED: 'false', SOPHIA_GEMINI_COSTS_CONFIRMED: 'true', [name]: value };
+      const gemini = analysisConfiguration(context(deployment, environment)).models.find((model) => model.id === 'gemini-3.8-flash');
+      assert.equal(gemini.access, 'credits');
+      assert.equal(gemini.available, false);
+      assert.equal(gemini.unavailableReason, 'not_configured');
+      await assert.rejects(() => analyzeConfigured('Claim', { modelId: gemini.id }, { ...context(deployment, environment), gemini: async () => assert.fail('Missing prerequisites must not call Gemini') }), (error) => error.status === 503);
+    }
+  }
+});
+
+test('unconfirmed Gemini stays unavailable and client options cannot acknowledge server costs', async () => {
+  for (const deployment of ['public', 'admin']) for (const confirmation of [undefined, 'false', '', ' ', 'TRUE', ' true ', true, 1]) {
+    const environment = { ...modelEnvironment, SOPHIA_GEMINI_FREE_CONFIRMED: confirmation, SOPHIA_GEMINI_COSTS_CONFIRMED: confirmation };
+    const gemini = analysisConfiguration(context(deployment, environment)).models.find((model) => model.id === 'gemini-3.8-flash');
+    assert.equal(gemini.access, 'credits');
+    assert.equal(gemini.available, false);
+    assert.equal(gemini.unavailableReason, 'not_configured');
+    await assert.rejects(() => analyzeConfigured('Claim', {
+      modelId: gemini.id, access: 'credits', costsConfirmed: true, SOPHIA_GEMINI_COSTS_CONFIRMED: 'true',
+      environment: { ...environment, SOPHIA_GEMINI_COSTS_CONFIRMED: 'true' },
+    }, { ...context(deployment, environment), gemini: async () => assert.fail('Client-supplied confirmations must not activate Gemini') }), (error) => error.status === 503);
+  }
 });
 
 test('deployed model dispatch pins each adapter/model and preserves language and result identity', async () => {
