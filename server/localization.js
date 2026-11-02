@@ -3,6 +3,7 @@ export const languages = ['en', 'he', 'ru'];
 // English messages remain the internal keys so existing callers and logs retain
 // their meaning. Translate only trusted application messages, never source text.
 const messages = {
+  'The analysis took too long. Please try again.': ['הניתוח נמשך זמן רב מדי. יש לנסות שוב.', 'Анализ занял слишком много времени. Повторите попытку.'],
   'Choose a valid analysis model.': ['יש לבחור מודל ניתוח תקין.', 'Выберите допустимую модель анализа.'],
   'Model selection is available on deployed public and administrator sites only.': ['בחירת מודל זמינה רק באתר הציבורי ובאתר המנהל הפרוסים.', 'Выбор модели доступен только на опубликованных публичном и административном сайтах.'],
   'The selected analysis model is not configured. Please try again later.': ['מודל הניתוח שנבחר אינו מוגדר. יש לנסות שוב מאוחר יותר.', 'Выбранная модель анализа не настроена. Повторите попытку позже.'],

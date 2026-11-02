@@ -18,6 +18,8 @@ export async function analyzeConfigured(text, options = {}, {
     const adapter = { xai: grok, openai, gemini, cloudflare }[selected.provider];
     const providerOptions = {
       ...(options.language !== undefined ? { language: options.language } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+      ...(options.deadline !== undefined ? { deadline: options.deadline } : {}),
       model: selected.model,
       ...(selected.provider !== 'xai' ? { requireCitations: true } : {}),
     };

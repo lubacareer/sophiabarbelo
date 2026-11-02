@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeWithCloudflare } from './cloudflare.js';
+import { createDeadline } from './deadline.js';
 
 const options = { accountId: 'a'.repeat(32), apiToken: 'private-cloudflare-token', tavilyApiKey: 'private-tavily-key' };
 const empty = { claims: [], rhetoric: [], limitations: [] };
@@ -60,4 +61,21 @@ test('Cloudflare rejects missing credentials or unsafe account identifiers befor
   for (const overrides of [{ accountId: '' }, { accountId: '../../other-account' }, { accountId: 'https://private.example' }, { apiToken: '' }, { tavilyApiKey: '' }]) {
     await assert.rejects(() => analyzeWithCloudflare('Claim', { ...options, ...overrides, fetchImpl: async () => { assert.fail('No provider request is allowed'); } }), (error) => error.status === 503);
   }
+});
+
+test('Cloudflare honors request expiry after query parsing and does not start Tavily or final analysis', async () => {
+  let clock = 0;
+  const deadline = createDeadline(280_000, { now: () => clock, setTimer: () => null, clearTimer: () => {} });
+  clock = 250_000;
+  let calls = 0;
+  let requestSignal;
+  try {
+    await assert.rejects(() => analyzeWithCloudflare('Claim', { ...options, deadline, fetchImpl: async (_url, request) => {
+      calls++;
+      requestSignal = request.signal;
+      return { ok: true, json: async () => { clock = 280_001; return { choices: [{ finish_reason: 'stop', message: { content: '{"queries":["Context"]}' } }] }; } };
+    } }), (error) => error.status === 504);
+    assert.equal(calls, 1);
+    assert.equal(requestSignal.aborted, true);
+  } finally { deadline.dispose(); }
 });

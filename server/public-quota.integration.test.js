@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { createDeadline } from './deadline.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createConnection } from 'node:net';
@@ -305,6 +306,44 @@ test('public HTTP instances share real Redis quota across all four models and IP
       const commandCount = commands.length;
       for (let index = 0; index < 7; index++) assert.equal((await post(admin, '2001:db8::1')).status, 200);
       assert.equal(commands.length, commandCount, 'The administrator deployment must not acquire public quota.');
+    });
+  });
+});
+
+test('a timed-out public request keeps real leases through cancellation cleanup and retains both attempt charges', integration, async () => {
+  await withRedis(async ({ limiter, acquireCommand, counters }) => {
+    let expire;
+    let started;
+    let aborted;
+    let finishCleanup;
+    const ready = new Promise((resolve) => { started = resolve; });
+    const abortSeen = new Promise((resolve) => { aborted = resolve; });
+    const cleanup = new Promise((resolve) => { finishCleanup = resolve; });
+    const app = createApp({ deployment: 'public', modelEnvironment, sharedLimiter: limiter(),
+      deadlineFactory: () => createDeadline(280_000, { setTimer: (callback) => { expire = callback; return 1; }, clearTimer: () => {} }),
+      analyze: async (_text, { signal }) => {
+        started();
+        await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+        aborted();
+        await cleanup;
+        signal.throwIfAborted();
+      },
+    });
+    await withServers([app], async ([base]) => {
+      const request = post(base, '192.0.2.60');
+      try {
+        await ready;
+        const admitted = acquireCommand();
+        expire();
+        await abortSeen;
+        assert.equal(await redis(['ZCARD', admitted.keys[0]]), 1);
+        assert.equal(await redis(['ZCARD', admitted.keys[1]]), 1);
+        finishCleanup();
+        assert.equal((await request).status, 504);
+        assert.deepEqual(await counters(admitted.keys), ['1', '1']);
+        assert.equal(await redis(['ZCARD', admitted.keys[0]]), 0);
+        assert.equal(await redis(['ZCARD', admitted.keys[1]]), 0);
+      } finally { finishCleanup(); await request; }
     });
   });
 });

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { requestJson } from './research-http.js';
 import { localize } from './localization.js';
+import { createDeadline } from './deadline.js';
+import { AppError } from './errors.js';
 
 const request = (fetchImpl, extra = {}) => requestJson('https://provider.example/fixed-endpoint', { headers: { authorization: 'Bearer private-test-key' }, body: {}, fetchImpl, logger: () => {}, ...extra });
 
@@ -82,4 +84,43 @@ test('reading a stalled provider response remains within the shared abort deadli
   const rejected = assert.rejects(work, (error) => error.status === 502);
   controller.abort();
   await rejected;
+});
+
+test('shared request expiry aborts fetch and body waits with a safe 504', async () => {
+  for (const phase of ['fetch', 'body']) {
+    let expire;
+    const deadline = createDeadline(280_000, { setTimer: (callback) => { expire = callback; return 1; }, clearTimer: () => {} });
+    let started;
+    const ready = new Promise((resolve) => { started = resolve; });
+    let signal;
+    const work = request(async (_url, options) => {
+      signal = options.signal;
+      if (phase === 'fetch') { started(); return new Promise(() => {}); }
+      return { ok: true, json: async () => { started(); return new Promise(() => {}); } };
+    }, { deadline });
+    try {
+      await ready;
+      const rejected = assert.rejects(work, (error) => error.status === 504 && error.message === 'The analysis took too long. Please try again.');
+      expire();
+      await rejected;
+      assert.equal(signal.aborted, true);
+    } finally { deadline.dispose(); }
+  }
+});
+
+test('a body that finishes after absolute expiry cannot return a late success before timers run', async () => {
+  let clock = 0;
+  const deadline = createDeadline(280_000, { now: () => clock, setTimer: () => 1, clearTimer: () => {} });
+  try {
+    await assert.rejects(() => request(async () => ({ ok: true, json: async () => { clock = 280_000; return { result: 'late' }; } }), { deadline }), (error) => error.status === 504);
+  } finally { deadline.dispose(); }
+});
+
+test('external AppError cancellation messages cannot escape as deadline errors', async () => {
+  const controller = new AbortController();
+  const deadline = createDeadline(280_000, { signal: controller.signal });
+  controller.abort(new AppError(504, 'private cancellation detail'));
+  try {
+    await assert.rejects(() => request(async () => assert.fail('Cancelled work must not start'), { deadline }), (error) => error.status === 504 && error.message === 'The analysis took too long. Please try again.');
+  } finally { deadline.dispose(); }
 });

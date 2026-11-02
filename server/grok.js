@@ -1,6 +1,7 @@
 import { AppError } from './errors.js';
 import { localize, outputLanguageInstruction } from './localization.js';
 import { passageAnalysisInstruction } from './analysis-instruction.js';
+import { awaitWithSignal, checkDeadline } from './deadline.js';
 
 export const rhetoricCategories = ['scapegoating', 'selective_piety', 'shame_fear', 'demagogy', 'victim_blaming', 'intimidation', 'faulty_reasoning', 'other'];
 export const rhetoricInstruction = ` Use stable rhetoric categoryId values: scapegoating for assigning collective blame without adequate evidence (Azazel); selective_piety for applying claimed moral or religious standards selectively to favor an in-group (Stork Wings); shame_fear for appeals to shame or fear; demagogy for appeals to group resentment or prejudice in place of evidence; victim_blaming for treating a person's suffering as proof of their fault, including possible gaslighting only when the excerpt supports that interpretation; intimidation for threats or appeals to overwhelming power; faulty_reasoning for a concrete logical error; other for any other justified observation. A text's religious identity, disagreement, emotional tone, or use of rhetoric alone is not evidence of an error. Set isReasoningFlaw true only when the explanation identifies a specific invalid inference or contradiction in the excerpt; otherwise false. Do not treat questions, metaphor, uncertainty, or a contested premise alone as proof of a logical flaw. Category labels must be descriptive, and all observations remain interpretations rather than verdicts about people.`;
@@ -72,13 +73,20 @@ export function validatedResult(result, provider, original, language) {
   return { claims, rhetoric, limitations: result.limitations.filter((item) => typeof item === 'string').slice(0, 10) };
 }
 
-export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), language, fetchImpl = fetch } = {}) {
+function checkActive(deadline, signal) {
+  checkDeadline(deadline);
+  if (signal?.aborted) throw new AppError(502, 'The analysis service could not be reached. Please try again.');
+}
+
+export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, model = process.env.XAI_MODEL || 'grok-4.7', reasoningEffort = process.env.XAI_REASONING_EFFORT || (model.startsWith('grok-4.7') ? 'low' : undefined), language, fetchImpl = fetch, signal, deadline } = {}) {
+  checkActive(deadline, signal);
   if (!apiKey) throw new AppError(503, 'Analysis is unavailable: configure XAI_API_KEY on the server.');
+  const requestSignal = AbortSignal.any([signal, deadline?.signal, AbortSignal.timeout(120_000)].filter(Boolean));
   let response;
   try {
-    response = await fetchImpl('https://api.x.ai/v1/responses', {
+    response = await awaitWithSignal(fetchImpl('https://api.x.ai/v1/responses', {
       method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(120_000),
+      signal: requestSignal,
       body: JSON.stringify({
         model, store: false, include: ['no_inline_citations'],
         ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
@@ -86,8 +94,12 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
         tools: [{ type: 'web_search' }],
         text: { format: { type: 'json_schema', name: 'rhetoric_analysis', schema, strict: true } },
       }),
-    });
-  } catch { throw new AppError(502, 'The analysis service could not be reached. Please try again.'); }
+    }), requestSignal);
+    checkActive(deadline, signal);
+  } catch {
+    checkDeadline(deadline);
+    throw new AppError(502, 'The analysis service could not be reached. Please try again.');
+  }
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw new AppError(503, 'The analysis service credentials are invalid or do not have access.');
     if (response.status === 429) {
@@ -98,10 +110,17 @@ export async function analyzeWithGrok(text, { apiKey = process.env.XAI_API_KEY, 
     throw new AppError(502, 'The analysis service could not complete the request. Please try again.');
   }
   try {
-    const provider = await response.json();
+    const provider = await awaitWithSignal(response.json(), requestSignal);
+    checkActive(deadline, signal);
     const output = provider.output?.find((item) => item.type === 'message')?.content?.find((item) => item.type === 'output_text')?.text;
-    return validatedResult(JSON.parse(output), provider, text, language);
+    const parsed = JSON.parse(output);
+    checkActive(deadline, signal);
+    const result = validatedResult(parsed, provider, text, language);
+    checkActive(deadline, signal);
+    return result;
   } catch (error) {
+    checkDeadline(deadline);
+    if (requestSignal.aborted) throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
     if (error instanceof AppError) throw error;
     throw new AppError(502, 'The analysis service returned an incomplete result. Please try again.');
   }

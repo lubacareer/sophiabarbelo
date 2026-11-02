@@ -2,6 +2,15 @@
 
 Verified on November 2, 2026 for PR #7. Provider credentials remain outside the repository.
 
+## Shared extraction and analysis deadline correction
+
+- Both deployed roles now start a 280-second monotonic work deadline at the analysis handler, before quota acquisition and URL extraction. A 250-second extraction leaves at most 30 seconds for research; standalone research retains its 240-second cap. The Vercel function limit remains 300 seconds and public leases remain 330 seconds.
+- Controlled-clock and mocked-transport regressions cover late DNS completion/rejection, address fallback, redirects, Breaking The News extraction, native article-body/socket teardown, provider fetch/body cancellation, absolute expiry after synchronous parsing, safe localized HTTP 504 responses, and no later stages or late success. All four model dispatches forward the internal deadline on both deployed roles; local/Caddy options remain compatible.
+- Cancellation waits for cooperative pipeline cleanup before releasing capacity. A new real Redis regression checks that both lease sets remain occupied through cleanup, then release while the admitted attempt stays charged to both counters. Release uses its existing independent five-second store timeout.
+- Final local suite: **195 passed, eight Redis tests skipped**, zero failures. The local Docker engine is unavailable. [PR Checks](https://github.com/lubacareer/sophiabarbelo/pull/7/checks) run those tests against isolated Redis 7.4, including the new timeout cleanup regression.
+- Production build and `git diff --check` passed. Independent review found an inherited private cancellation-message edge case; it is now canonicalized to the safe timeout message and covered by a regression.
+- This correction used fixtures only, with no live model calls, credential or deployment-setting changes, manual deployments, or merge.
+
 ## Automated checks
 
 - [GitHub Checks on the final runtime change](https://github.com/lubacareer/sophiabarbelo/actions/runs/41432931770): **167 tests passed, zero skipped**, including real Redis 7.4/Lua quota tests and four invalid-expiry subcases. The production build passed.

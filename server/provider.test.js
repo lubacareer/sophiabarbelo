@@ -5,6 +5,7 @@ import { analyzeConfigured, analysisConfiguration, resolveAnalysisModel, support
 import { analyzeWithGroq } from './groq.js';
 import { analyzeWithGrok } from './grok.js';
 import { modelEnvironment } from '../test-support/models.js';
+import { createDeadline } from './deadline.js';
 
 const result = () => ({ claims: [], rhetoric: [], limitations: [] });
 const ids = ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7'];
@@ -195,4 +196,125 @@ test('local Groq preserves safe upstream errors without retrying another model',
     assert.equal(calls.length, scenario === 'analysis-tool-error' ? 2 : 1, scenario);
     assert.ok(calls.every((body) => body.model === 'openai/gpt-oss-120b'), scenario);
   }
+});
+
+test('all deployed adapters receive the same internal signal and deadline in both roles', async () => {
+  const deadline = createDeadline(60_000);
+  try {
+    for (const deployment of ['public', 'admin']) for (const [modelId, adapter] of [['luna', 'openai'], ['gemini-3.8-flash', 'gemini'], ['glm-4.7-flash', 'cloudflare'], ['grok-4.7', 'grok']]) {
+      let calls = 0;
+      const output = await analyzeConfigured('Claim', { modelId, language: 'he', signal: deadline.signal, deadline }, {
+        ...context(deployment),
+        [adapter]: async (_text, options) => {
+          calls++;
+          assert.equal(options.signal, deadline.signal);
+          assert.equal(options.deadline, deadline);
+          assert.equal(options.language, 'he');
+          return result();
+        },
+      });
+      assert.equal(calls, 1);
+      assert.equal(output.analysisModelId, modelId);
+    }
+  } finally { deadline.dispose(); }
+});
+
+test('local dispatch preserves existing provider options including internal cancellation context', async () => {
+  const deadline = createDeadline(60_000);
+  try {
+    for (const [provider, adapter] of [['xai', 'grok'], ['openai', 'openai'], ['groq', 'groq']]) {
+      const options = { language: 'ru', signal: deadline.signal, deadline };
+      const output = await analyzeConfigured('Claim', options, {
+        ...context('local', { ANALYSIS_PROVIDER: provider }),
+        [adapter]: async (_text, forwarded) => { assert.equal(forwarded, options); return result(); },
+      });
+      assert.deepEqual(output, result());
+    }
+  } finally { deadline.dispose(); }
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((yes) => { resolve = yes; });
+  return { promise, resolve };
+}
+
+function controlledDeadline() {
+  let now = 0;
+  let expireTimer;
+  const deadline = createDeadline(100, { now: () => now, setTimer: (callback) => { expireTimer = callback; return 0; }, clearTimer: () => {} });
+  return { deadline, elapse: () => { now = 101; }, expire: () => { now = 101; expireTimer(); } };
+}
+
+test('Grok aborts fetch and body waits safely with an external signal or shared deadline', async () => {
+  for (const phase of ['fetch', 'body']) for (const owned of [false, true]) {
+    const budget = controlledDeadline();
+    const controller = new AbortController();
+    const started = deferred();
+    let calls = 0;
+    let requestSignal;
+    const work = analyzeWithGrok('Claim', {
+      apiKey: 'test', signal: owned ? budget.deadline.signal : controller.signal, ...(owned ? { deadline: budget.deadline } : {}),
+      fetchImpl: async (_url, options) => {
+        calls++;
+        requestSignal = options.signal;
+        assert.equal(Object.hasOwn(JSON.parse(options.body), 'signal'), false);
+        assert.equal(Object.hasOwn(JSON.parse(options.body), 'deadline'), false);
+        if (phase === 'fetch') { started.resolve(); return new Promise(() => {}); }
+        return { ok: true, json: async () => { started.resolve(); return new Promise(() => {}); } };
+      },
+    });
+    await started.promise;
+    const rejected = assert.rejects(work, (error) => error.status === (owned ? 504 : 502) && !error.message.includes('private'));
+    if (owned) budget.expire();
+    else controller.abort(new AppError(499, 'private cancellation reason'));
+    await rejected;
+    assert.equal(requestSignal.aborted, true);
+    assert.equal(calls, 1);
+    budget.deadline.dispose();
+  }
+});
+
+test('Grok checks absolute expiry before requests and after JSON/parsing without relying on timer callbacks', async (t) => {
+  const parsed = JSON.stringify(result());
+  for (const phase of ['before', 'body', 'parse']) {
+    const budget = controlledDeadline();
+    let calls = 0;
+    if (phase === 'before') budget.elapse();
+    const originalParse = JSON.parse;
+    const mock = phase === 'parse' ? t.mock.method(JSON, 'parse', (value, ...options) => {
+      const output = originalParse(value, ...options);
+      if (value === parsed) budget.elapse();
+      return output;
+    }) : null;
+    try {
+      await assert.rejects(() => analyzeWithGrok('Claim', { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => {
+        calls++;
+        return { ok: true, json: async () => {
+          if (phase === 'body') budget.elapse();
+          return { output: [{ type: 'message', content: [{ type: 'output_text', text: parsed }] }] };
+        } };
+      } }), (error) => error.status === 504);
+      assert.equal(calls, phase === 'before' ? 0 : 1);
+    } finally { mock?.mock.restore(); budget.deadline.dispose(); }
+  }
+  const controller = new AbortController();
+  controller.abort(new Error('private prior cancellation'));
+  await assert.rejects(() => analyzeWithGrok('Claim', { apiKey: 'test', signal: controller.signal, fetchImpl: async () => { assert.fail('Aborted work must not start'); } }), (error) => error.status === 502 && !error.message.includes('private'));
+});
+
+test('Grok retains its 120-second request cap independently of the parent budget', async (t) => {
+  const cap = new AbortController();
+  const timeouts = [];
+  t.mock.method(AbortSignal, 'timeout', (milliseconds) => { timeouts.push(milliseconds); return cap.signal; });
+  const budget = controlledDeadline();
+  const started = deferred();
+  const work = analyzeWithGrok('Claim', { apiKey: 'test', deadline: budget.deadline, fetchImpl: async () => { started.resolve(); return new Promise(() => {}); } });
+  await started.promise;
+  const rejected = assert.rejects(work, (error) => error.status === 502 && !error.message.includes('private'));
+  cap.abort(new AppError(499, 'private request-cap reason'));
+  await rejected;
+  assert.deepEqual(timeouts, [120_000]);
+  assert.equal(budget.deadline.signal.aborted, false);
+  budget.deadline.dispose();
 });

@@ -4,6 +4,7 @@ import { outputLanguageInstruction } from './localization.js';
 import { passageAnalysisInstruction } from './analysis-instruction.js';
 import { searchWithTavily } from './tavily.js';
 import { incompleteResult, researchUnavailable } from './research-http.js';
+import { checkDeadline, createDeadline, deadlineExceeded } from './deadline.js';
 
 export const RESEARCH_LIMITS = Object.freeze({ queries: 3, queryChars: 400, queryTokens: 2048, analysisTokens: 8192, researchChars: 30_000, timeoutMs: 240_000 });
 export const querySchema = {
@@ -48,23 +49,44 @@ function boundedResearch(queries, candidates) {
   return { sources, serialized: serialize(sources) };
 }
 
-export async function analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal }) {
+export async function analyzeWithResearch(text, { complete, language, tavilyApiKey, fetchImpl, signal, deadline }) {
   if (!tavilyApiKey) throw new AppError(503, 'Free web research is not configured. Please try again later.');
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(RESEARCH_LIMITS.timeoutMs)].filter(Boolean));
-  const queries = queriesFrom(await complete({ system: queryInstruction + passageAnalysisInstruction, input: text, schema: querySchema, maxTokens: RESEARCH_LIMITS.queryTokens, signal: deadline }));
-  // Await every search before returning an error so its public quota lease stays
-  // held while sibling searches are still running. No retry or model fallback.
-  const searches = await Promise.allSettled(queries.map((query) => searchWithTavily(query, { apiKey: tavilyApiKey, fetchImpl, signal: deadline })));
-  const failure = searches.find((item) => item.status === 'rejected');
-  if (failure) throw failure.reason;
-  const research = boundedResearch(queries, searches.flatMap((item) => item.value));
-  const result = await complete({
-    system: analysisInstruction + passageAnalysisInstruction + rhetoricInstruction + outputLanguageInstruction(language),
-    input: JSON.stringify({ originalText: text, research: research.serialized, providerReportedUrls: research.sources.map(({ url }) => url) }),
-    schema, maxTokens: RESEARCH_LIMITS.analysisTokens, signal: deadline,
-  });
-  const validated = validatedResult(result, { citations: research.sources }, text, language);
-  const sourceTitles = new Map(research.sources.map(({ url, title }) => [url, title]));
-  for (const claim of validated.claims) for (const source of claim.sources) source.title = sourceTitles.get(source.url);
-  return validated;
+  const researchDeadline = createDeadline(RESEARCH_LIMITS.timeoutMs, { parent: deadline, signal });
+  try {
+    checkDeadline(researchDeadline);
+    const plan = await complete({ system: queryInstruction + passageAnalysisInstruction, input: text, schema: querySchema, maxTokens: RESEARCH_LIMITS.queryTokens, signal: researchDeadline.signal, deadline: researchDeadline });
+    checkDeadline(researchDeadline);
+    const queries = queriesFrom(plan);
+    checkDeadline(researchDeadline);
+    // Await every search before returning an error so its public quota lease stays
+    // held while sibling searches are still running. No retry or model fallback.
+    const searches = await Promise.allSettled(queries.map((query) => searchWithTavily(query, { apiKey: tavilyApiKey, fetchImpl, signal: researchDeadline.signal, deadline: researchDeadline })));
+    checkDeadline(researchDeadline);
+    const failure = searches.find((item) => item.status === 'rejected');
+    if (failure) throw failure.reason;
+    const research = boundedResearch(queries, searches.flatMap((item) => item.value));
+    checkDeadline(researchDeadline);
+    const input = JSON.stringify({ originalText: text, research: research.serialized, providerReportedUrls: research.sources.map(({ url }) => url) });
+    checkDeadline(researchDeadline);
+    const result = await complete({
+      system: analysisInstruction + passageAnalysisInstruction + rhetoricInstruction + outputLanguageInstruction(language),
+      input, schema, maxTokens: RESEARCH_LIMITS.analysisTokens, signal: researchDeadline.signal, deadline: researchDeadline,
+    });
+    checkDeadline(researchDeadline);
+    const validated = validatedResult(result, { citations: research.sources }, text, language);
+    checkDeadline(researchDeadline);
+    const sourceTitles = new Map(research.sources.map(({ url, title }) => [url, title]));
+    for (const claim of validated.claims) for (const source of claim.sources) source.title = sourceTitles.get(source.url);
+    checkDeadline(researchDeadline);
+    return validated;
+  } catch (error) {
+    // An external AbortSignal can carry any private reason. Only the canonical
+    // deadline error may leave this boundary; cancellation gets a generic error.
+    try { checkDeadline(researchDeadline); }
+    catch (reason) {
+      if (reason instanceof AppError && reason.status === 504) throw deadlineExceeded();
+      throw new AppError(503, 'Analysis is temporarily unavailable. Please try again later.');
+    }
+    throw error;
+  } finally { researchDeadline.dispose(); }
 }

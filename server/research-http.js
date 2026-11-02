@@ -1,4 +1,5 @@
 import { AppError } from './errors.js';
+import { awaitWithSignal, checkDeadline, deadlineExceeded } from './deadline.js';
 
 const providerHosts = new Set(['generativelanguage.googleapis.com', 'api.cloudflare.com', 'api.tavily.com']);
 
@@ -17,24 +18,21 @@ function retryAfter(response) {
   return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
-function withSignal(promise, signal) {
-  return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason);
-    if (signal.aborted) abort();
-    else signal.addEventListener('abort', abort, { once: true });
-    Promise.resolve(promise).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-  });
+function preserveDeadlineError(deadline) {
+  try { deadline?.check(); }
+  catch (error) { if (error instanceof AppError && error.status === 504) throw deadlineExceeded(); }
 }
 
 // Every request, including reading its JSON body, shares the analysis deadline.
 // Only trusted, already localized application messages leave this boundary.
-export async function requestJson(url, { headers, body, fetchImpl, signal, timeoutMs = 120_000, research = false, logger = console.warn }) {
-  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)].filter(Boolean));
+export async function requestJson(url, { headers, body, fetchImpl, signal, deadline, timeoutMs = 120_000, research = false, logger = console.warn }) {
+  const requestSignal = AbortSignal.any([signal, deadline?.signal, AbortSignal.timeout(timeoutMs)].filter(Boolean));
   let response;
   try {
-    requestSignal.throwIfAborted();
-    response = await withSignal(fetchImpl(url, { method: 'POST', redirect: 'error', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: requestSignal }), requestSignal);
-  } catch { throw research ? researchUnavailable() : new AppError(502, 'The analysis service could not be reached. Please try again.'); }
+    checkDeadline(deadline, requestSignal);
+    response = await awaitWithSignal(fetchImpl(url, { method: 'POST', redirect: 'error', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: requestSignal }), requestSignal);
+    checkDeadline(deadline, requestSignal);
+  } catch { preserveDeadlineError(deadline); throw research ? researchUnavailable() : new AppError(502, 'The analysis service could not be reached. Please try again.'); }
   if (!response?.ok) {
     // Never log the request URL, credentials, input, or provider response body.
     // Restrict diagnostics to known fixed API hosts and real HTTP status codes.
@@ -55,11 +53,11 @@ export async function requestJson(url, { headers, body, fetchImpl, signal, timeo
     throw research ? researchUnavailable() : new AppError(502, 'The analysis service could not complete the request. Please try again.');
   }
   try {
-    requestSignal.throwIfAborted();
-    const payload = await withSignal(response.json(), requestSignal);
-    requestSignal.throwIfAborted();
+    checkDeadline(deadline, requestSignal);
+    const payload = await awaitWithSignal(response.json(), requestSignal);
+    checkDeadline(deadline, requestSignal);
     return payload;
-  } catch { throw research ? researchUnavailable() : incompleteResult(); }
+  } catch { preserveDeadlineError(deadline); throw research ? researchUnavailable() : incompleteResult(); }
 }
 
 export function parseModelJson(value) {

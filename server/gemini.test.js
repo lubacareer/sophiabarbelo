@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyzeWithGemini } from './gemini.js';
+import { createDeadline } from './deadline.js';
 
 const empty = { claims: [], rhetoric: [], limitations: [] };
 const interaction = (value) => ({ ok: true, json: async () => ({ status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify(value) }] }] }) });
@@ -63,4 +64,21 @@ test('Gemini requires both credentials before starting any provider request', as
   for (const overrides of [{ apiKey: '' }, { tavilyApiKey: '' }]) {
     await assert.rejects(() => analyzeWithGemini('Original', { ...options, ...overrides, fetchImpl: async () => { assert.fail('No provider request is allowed'); } }), (error) => error.status === 503);
   }
+});
+
+test('Gemini honors the request deadline before search rather than starting a fresh research budget', async () => {
+  let clock = 0;
+  const deadline = createDeadline(280_000, { now: () => clock, setTimer: () => null, clearTimer: () => {} });
+  clock = 250_000;
+  let calls = 0;
+  let requestSignal;
+  try {
+    await assert.rejects(() => analyzeWithGemini('Claim', { ...options, deadline, fetchImpl: async (_url, request) => {
+      calls++;
+      requestSignal = request.signal;
+      return { ok: true, json: async () => { clock = 280_001; return { status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: '{"queries":["Context"]}' }] }] }; } };
+    } }), (error) => error.status === 504);
+    assert.equal(calls, 1, 'No Tavily or final model call may follow expiry.');
+    assert.equal(requestSignal.aborted, true);
+  } finally { deadline.dispose(); }
 });

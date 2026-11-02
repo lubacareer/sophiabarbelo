@@ -7,6 +7,7 @@ import { analyzeConfigured, analysisConfiguration, resolveAnalysisModel } from '
 import { createSharedLimiter } from './shared-limiter.js';
 import { AppError } from './errors.js';
 import { languages, localize, requestLanguage } from './localization.js';
+import { createDeadline, REQUEST_WORK_TIMEOUT_MS } from './deadline.js';
 
 const MAX_TEXT = 30_000;
 const RATE_WINDOW_MS = 10 * 60_000;
@@ -37,7 +38,7 @@ function sameSecret(actual, expected) {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
-export function createApp({ extract = extractArticle, analyze, proxySecret = process.env.SOPHIA_PROXY_SECRET, now = Date.now, deployment = 'local', sharedLimiter = createSharedLimiter(), modelEnvironment = process.env } = {}) {
+export function createApp({ extract = extractArticle, analyze, proxySecret = process.env.SOPHIA_PROXY_SECRET, now = Date.now, deployment = 'local', sharedLimiter = createSharedLimiter(), modelEnvironment = process.env, deadlineFactory = () => createDeadline(REQUEST_WORK_TIMEOUT_MS) } = {}) {
   if (!['local', 'public', 'admin'].includes(deployment)) throw new Error('Invalid deployment mode');
   const context = { deployment, environment: modelEnvironment };
   const runAnalysis = analyze || ((text, options) => analyzeConfigured(text, options, context));
@@ -63,6 +64,10 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
     catch (error) { next(error); }
   });
   app.post('/api/analyze', async (req, res, next) => {
+    // Start before quota acquisition/extraction. Reserve platform headroom and
+    // keep local/Caddy routing on its existing provider-specific limits.
+    const deadline = deployment === 'local' ? undefined : deadlineFactory();
+    const cancellation = deadline ? { deadline, signal: deadline.signal } : {};
     let acquired = false;
     let releaseLease;
     async function release() {
@@ -90,6 +95,7 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
       if (type === 'url') parsePublicUrl(value);
       // Selection is server-authorized before quota admission or extraction.
       const selected = resolveAnalysisModel({ modelId, reasoningEffort }, context);
+      deadline?.check();
 
       if (deployment === 'public') {
         // Vercel overwrites X-Forwarded-For at its ingress. Never use the
@@ -134,12 +140,21 @@ export function createApp({ extract = extractArticle, analyze, proxySecret = pro
           acquired = true;
         }
       }
-      const text = type === 'url' ? await extract(value) : value;
-      const result = await runAnalysis(text, { reasoningEffort, ...(language !== undefined ? { language } : {}), ...(selected ? { modelId: selected.id } : {}) });
+      deadline?.check();
+      const text = type === 'url' ? await extract(value, cancellation) : value;
+      deadline?.check();
+      const result = await runAnalysis(text, { reasoningEffort, ...(language !== undefined ? { language } : {}), ...(selected ? { modelId: selected.id } : {}), ...cancellation });
+      deadline?.check();
       await release();
       res.set('Cache-Control', 'no-store').json({ ...result, ...(selected ? { analysisModelId: selected.id } : {}), sourceText: text });
-    } catch (error) { await release(); next(error); }
-    finally { if (acquired) anonymousInFlight--; }
+    } catch (error) {
+      let failure = error;
+      try { deadline?.check(); } catch (expired) { failure = expired; }
+      // Release has its own bounded store request, not the expired work signal.
+      await release();
+      next(failure);
+    }
+    finally { deadline?.dispose(); if (acquired) anonymousInFlight--; }
   });
   app.use((error, req, res, _next) => {
     const language = requestLanguage(req);

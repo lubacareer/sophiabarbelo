@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { searchWithTavily } from './tavily.js';
+import { createDeadline } from './deadline.js';
 
 test('Tavily fixes search cost parameters and uses only five safe metadata results', async () => {
   const results = Array.from({ length: 6 }, (_, index) => ({ url: `https://example.org/source-${index}#section`, title: `Source ${index}`, content: 'Evidence '.repeat(1000) }));
@@ -34,4 +35,23 @@ test('Tavily rejects malformed responses and invalid queries without leaking det
     await assert.rejects(() => searchWithTavily('Query', { apiKey: 'test', fetchImpl: async () => { calls++; return { ok: true, json: async () => payload }; } }), (error) => error.status === 503 && !error.message.includes('private'));
     assert.equal(calls, 1);
   }
+});
+
+test('Tavily checks expiry after synchronous source validation and never returns a late result', async () => {
+  let clock = 0;
+  const deadline = createDeadline(1000, { now: () => clock, setTimer: () => null, clearTimer: () => {} });
+  const item = { url: 'https://example.org/source', title: 'Context', get content() { clock = 1001; return 'Evidence'; } };
+  try {
+    await assert.rejects(() => searchWithTavily('Query', { apiKey: 'test', deadline, fetchImpl: async () => ({ ok: true, json: async () => ({ results: [item] }) }) }), (error) => error.status === 504);
+  } finally { deadline.dispose(); }
+});
+
+test('Tavily rejects pre-expired requests and keeps external abort reasons private', async () => {
+  const deadline = createDeadline(0, { setTimer: () => null, clearTimer: () => {} });
+  try {
+    await assert.rejects(() => searchWithTavily('Query', { apiKey: 'test', deadline, fetchImpl: async () => { assert.fail('Expired work must not fetch.'); } }), (error) => error.status === 504);
+  } finally { deadline.dispose(); }
+  const controller = new AbortController();
+  controller.abort(new Error('private transport cancellation'));
+  await assert.rejects(() => searchWithTavily('Query', { apiKey: 'test', signal: controller.signal, fetchImpl: async () => { assert.fail('Cancelled work must not fetch.'); } }), (error) => error.status === 503 && error.providerResearchUnavailable === true && !error.message.includes('private'));
 });
