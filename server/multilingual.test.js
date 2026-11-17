@@ -100,6 +100,7 @@ test('daily public quota errors are localized and retain Retry-After', async () 
 test('language is forwarded through every selected deployed model and the existing local providers', async () => {
   for (const deployment of ['public', 'admin']) {
     for (const [modelId, provider] of [['luna', 'openai'], ['gemini-3.8-flash', 'gemini'], ['glm-4.7-flash', 'cloudflare'], ['grok-4.7', 'grok']]) {
+      if (deployment === 'public' && modelId === 'luna') continue;
       const calls = [];
       const output = await analyzeConfigured('טענה. Утверждение.', { modelId, language: 'ru', ...(deployment === 'admin' && provider === 'grok' ? { reasoningEffort: 'high' } : {}) }, {
         deployment, environment: modelEnvironment,

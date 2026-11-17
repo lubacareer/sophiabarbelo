@@ -22,7 +22,8 @@ export function parseModelConfig(value) {
     if (!model || !Object.hasOwn(modelLabels, model.id) || typeof model.label !== 'string' || !model.label.trim()
       || typeof model.available !== 'boolean' || typeof model.reasoningControls !== 'boolean'
       || !['credits', 'free'].includes(model.access)
-      || (model.available ? model.unavailableReason !== null : model.unavailableReason !== 'not_configured')) throw new Error('Invalid model configuration');
+      || (model.available ? model.unavailableReason !== null : !(model.unavailableReason === 'not_configured'
+        || (model.id === 'luna' && model.unavailableReason === 'admin_only')))) throw new Error('Invalid model configuration');
     return { id: model.id, label: model.label, available: model.available, unavailableReason: model.unavailableReason, reasoningControls: model.reasoningControls, access: model.access };
   });
   if (new Set(models.map(({ id }) => id)).size !== ids.length || !models.some(({ id }) => id === value.defaultModelId)) throw new Error('Invalid model configuration');

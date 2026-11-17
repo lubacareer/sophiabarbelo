@@ -35,3 +35,16 @@ test('model configuration, availability, and result attribution copy is localize
   assert.match(translate('he', 'modelConfigError'), /\p{Script=Hebrew}/u);
   assert.match(translate('ru', 'modelChooseAvailable'), /\p{Script=Cyrillic}/u);
 });
+
+test('administrator-only model copy is localized and explains how public visitors can continue', () => {
+  const model = 'GPT-6 Luna';
+  assert.equal(translate('en', 'modelAdminOnly'), 'Administrator only');
+  assert.equal(translate('en', 'modelAdminUnavailable', { model }), 'GPT-6 Luna is available on the administrator site only. Choose another model to continue.');
+  for (const language of ['he', 'ru']) {
+    const script = language === 'he' ? /\p{Script=Hebrew}/u : /\p{Script=Cyrillic}/u;
+    assert.match(translate(language, 'modelAdminOnly'), script);
+    assert.match(translate(language, 'modelAdminUnavailable', { model }), script);
+    assert.ok(translate(language, 'modelAdminUnavailable', { model }).includes(model));
+    assert.ok(!translate(language, 'modelAdminUnavailable', { model }).includes('{model}'));
+  }
+});
