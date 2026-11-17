@@ -139,7 +139,7 @@ test('public, admin, and local dispatch retain explicit symbolic settings withou
     assert.equal(analysisConfiguration({ deployment, environment: modelEnvironment }).symbolicReadings, true);
     const cases = deployment === 'local' ? [['xai', 'grok'], ['openai', 'openai'], ['groq', 'groq']]
       : [['luna', 'openai'], ['gemini-3.8-flash', 'gemini'], ['glm-4.7-flash', 'cloudflare'], ['grok-4.7', 'grok']];
-    for (const [choice, expected] of cases) for (const includeSymbolicReadings of [false, true]) {
+    for (const [choice, expected] of cases.filter(([id]) => deployment !== 'public' || id !== 'luna')) for (const includeSymbolicReadings of [false, true]) {
       const calls = [];
       const adapters = Object.fromEntries(['grok', 'groq', 'openai', 'gemini', 'cloudflare'].map((name) => [name, async (_text, options) => { calls.push({ name, options }); return empty(); }]));
       await analyzeConfigured(original, { includeSymbolicReadings, ...(deployment === 'local' ? {} : { modelId: choice }) }, { deployment, environment: { ...modelEnvironment, ANALYSIS_PROVIDER: choice }, ...adapters });

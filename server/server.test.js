@@ -46,12 +46,13 @@ test('deployed API validates model selection and configuration before quota or U
   await withServer(app, async (base) => {
     const send = (body) => fetch(`${base}/api/analyze`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.1' }, body: JSON.stringify({ type: 'url', content: 'https://example.org/article', ...body }) });
     for (const modelId of ['', null, 1, [], {}, 'groq', 'openai/gpt-oss-120b', 'unrecognized']) assert.equal((await send({ modelId })).status, 400);
-    for (const modelId of ['luna', 'glm-4.7-flash', 'grok-4.7']) assert.equal((await send({ modelId, reasoningEffort: 'high' })).status, 400);
+    for (const modelId of ['glm-4.7-flash', 'grok-4.7']) assert.equal((await send({ modelId, reasoningEffort: 'high' })).status, 400);
+    assert.equal((await send({ modelId: 'luna' })).status, 403);
     assert.equal((await send({ modelId: 'gemini-3.8-flash' })).status, 503);
     assert.deepEqual([acquisitions, extractions, analyses], [0, 0, 0]);
     const response = await send({});
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).analysisModelId, 'luna');
+    assert.equal((await response.json()).analysisModelId, 'glm-4.7-flash');
     assert.deepEqual([acquisitions, extractions, analyses], [1, 1, 1]);
   });
 });
@@ -69,7 +70,7 @@ test('configuration and model reasoning follow createApp deployment rather than 
       assert.equal(config.reasoningControls, false);
       if (deployment === 'local') assert.equal(Object.hasOwn(config, 'models'), false);
       else {
-        assert.equal(config.defaultModelId, 'luna');
+        assert.equal(config.defaultModelId, deployment === 'public' ? 'glm-4.7-flash' : 'luna');
         assert.deepEqual(config.models.filter((model) => model.reasoningControls).map((model) => model.id), deployment === 'admin' ? ['grok-4.7'] : []);
       }
       const response = await fetch(`${base}/api/analyze`, {

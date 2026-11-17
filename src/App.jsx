@@ -197,6 +197,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const t = (key, values) => translate(language, key, values);
   const modelConfig = configuration.value;
+  const unavailableLabel = (model) => t(model.unavailableReason === 'admin_only' ? 'modelAdminOnly' : 'modelNotConfigured');
   const currentModel = selectedModel(modelConfig, modelId);
   const supportsReasoning = modelConfig?.kind === 'legacy' ? modelConfig.reasoningControls : currentModel?.available && currentModel.reasoningControls;
   const canAnalyze = configuration.status === 'ready' && modelRequestSettings(modelConfig, modelId) !== null;
@@ -357,10 +358,10 @@ export default function App() {
           <label htmlFor="analysis-model">{t('model')}</label>
           <select id="analysis-model" value={currentModel.id} onChange={(event) => { setModelId(event.target.value); setReasoningEffort(''); setError(null); }} disabled={isLoading} aria-invalid={!currentModel.available} aria-describedby="model-description model-availability">
             {!modelConfig.models.some(({ id }) => id === currentModel.id) && <option value={currentModel.id} disabled>{currentModel.label} — {t('modelNotConfigured')}</option>}
-            {modelConfig.models.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label} · {t(model.access === 'free' ? 'modelFree' : 'modelCredits')}{model.available ? '' : ' — ' + t('modelNotConfigured')}</option>)}
+            {modelConfig.models.map((model) => <option key={model.id} value={model.id} disabled={!model.available}>{model.label} · {t(model.access === 'free' ? 'modelFree' : 'modelCredits')}{model.available ? '' : ' — ' + unavailableLabel(model)}</option>)}
           </select>
           <p id="model-description">{t('modelHint')}</p>
-          <p id="model-availability" className={currentModel.available ? 'model-access' : 'model-unavailable'} role={currentModel.available ? undefined : 'alert'}>{currentModel.available ? t(currentModel.access === 'free' ? 'modelFree' : 'modelCredits') : t('modelUnavailable', { model: currentModel.label })}</p>
+          <p id="model-availability" className={currentModel.available ? 'model-access' : 'model-unavailable'} role={currentModel.available ? undefined : 'alert'}>{currentModel.available ? t(currentModel.access === 'free' ? 'modelFree' : 'modelCredits') : t(currentModel.unavailableReason === 'admin_only' ? 'modelAdminUnavailable' : 'modelUnavailable', { model: currentModel.label })}</p>
         </div>}
         {supportsReasoning && <div className="reasoning-options">
           <div className="reasoning-copy"><label htmlFor="reasoning-effort">{t('reasoning')}{currentModel && <span> · <bdi>{currentModel.label}</bdi></span>}</label><p id="reasoning-description">{t('reasoningHint')}</p></div>

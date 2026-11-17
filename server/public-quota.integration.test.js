@@ -294,7 +294,7 @@ async function waitForAnalysisStart(ready, request, timeoutMs = 5000) {
 
 const emptyResult = { claims: [], rhetoric: [], limitations: [] };
 
-test('public HTTP instances share real Redis quota across all four models and IPv6 /64; forged admin headers cannot bypass it', integration, async () => {
+test('public HTTP instances share real Redis quota across all three public models and IPv6 /64; forged admin headers cannot bypass it', integration, async () => {
   await withRedis(async ({ limiter, commands, acquireCommand, counters }) => {
     const apps = ['public', 'public', 'admin'].map((deployment) => createApp({ deployment, modelEnvironment, sharedLimiter: limiter(), analyze: async () => emptyResult }));
     await withServers(apps, async ([first, second, admin]) => {
@@ -303,7 +303,10 @@ test('public HTTP instances share real Redis quota across all four models and IP
         assert.equal((await post(first, '2001:db8::1', spoof, body)).status, 400);
         assert.equal(commands.length, 0, 'Invalid bodies and rejected URLs must fail before any Redis EVAL.');
       }
-      const selections = ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7', 'luna'];
+      const denied = await post(first, '2001:db8::1', spoof, { type: 'text', content: 'A local test passage.', modelId: 'luna' });
+      assert.equal(denied.status, 403);
+      assert.equal(commands.length, 0, 'Luna must fail before any Redis EVAL, even with forged administrator headers.');
+      const selections = ['gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7', 'gemini-3.8-flash', 'glm-4.7-flash'];
       for (const [index, modelId] of selections.entries()) {
         const response = await post(index % 2 ? first : second, `2001:db8::${index + 1}`, spoof, { type: 'text', content: 'A local test passage.', modelId });
         assert.equal(response.status, 200);

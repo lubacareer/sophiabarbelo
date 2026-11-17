@@ -1,6 +1,12 @@
 # Model picker validation
 
-Verified on November 2, 2026 for PR #7. Provider credentials remain outside the repository.
+The sections below record verification on November 2, 2026 for PR #7. Provider credentials remain outside the repository.
+
+## Administrator-only Luna policy — November 17, 2026
+
+The current policy supersedes the historical public-Luna activation and default statements below: public analysis defaults to GLM-4.7-Flash, while Luna remains the protected administrator default. Public Luna is shown disabled with `admin_only` availability metadata and rejected with localized HTTP 403 before quota acquisition, extraction, or model dispatch, independently of public OpenAI credentials. Saved public Luna selections remain disabled until the visitor explicitly selects an available model. The public project must not retain OpenAI credentials or cost confirmations.
+
+Regression coverage now distinguishes the three permitted public models from all four administrator models, preserving local/Caddy routing and administrator Luna symbolic/deadline coverage. The real Redis regression asserts that a forged-administrator public Luna request makes no Redis calls, then verifies quota sharing across Gemini, GLM, and Grok. Current execution and deployment results are recorded in the associated PR; the original provider smoke tests below are historical and were not repeated for this policy change.
 
 ## GLM connection and timeout investigation
 

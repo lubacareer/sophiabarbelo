@@ -46,7 +46,9 @@ test('configured public Vercel API entrypoint serves the configuration route', a
     assert.equal(response.status, 200);
     const config = await response.json();
     assert.equal(config.reasoningControls, false);
-    assert.equal(config.defaultModelId, 'luna');
+    assert.equal(config.defaultModelId, 'glm-4.7-flash');
+    assert.equal(config.models.find((model) => model.id === 'luna').available, false);
+    assert.equal(config.models.find((model) => model.id === 'luna').unavailableReason, 'admin_only');
     assert.deepEqual(config.models.map((model) => model.id), ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7']);
     assert.ok(config.models.every((model) => model.reasoningControls === false));
     assert.equal(response.headers.get('cache-control'), 'no-store');

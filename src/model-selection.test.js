@@ -37,6 +37,31 @@ test('remembered unavailable or removed models stay selected until an explicit n
   assert.equal(modelRequestSettings(parseModelConfig(input), null), null, 'An unavailable default must not auto-select another model.');
 });
 
+test('public administrator-only Luna stays selected and cannot submit until an explicit available choice', () => {
+  const input = configured();
+  input.defaultModelId = 'glm-4.7-flash';
+  Object.assign(input.models.find(({ id }) => id === 'glm-4.7-flash'), { available: true, unavailableReason: null });
+  Object.assign(input.models.find(({ id }) => id === 'luna'), { available: false, unavailableReason: 'admin_only' });
+  const config = parseModelConfig(input);
+  assert.equal(selectedModel(config, null).id, 'glm-4.7-flash');
+  assert.deepEqual(modelRequestSettings(config, null), { modelId: 'glm-4.7-flash' });
+  assert.equal(selectedModel(config, 'luna').id, 'luna');
+  assert.equal(selectedModel(config, 'luna').unavailableReason, 'admin_only');
+  assert.equal(modelRequestSettings(config, 'luna'), null);
+  assert.deepEqual(modelRequestSettings(config, 'gemini-3.8-flash'), { modelId: 'gemini-3.8-flash' });
+  assert.equal(modelLabel('luna', config), 'GPT-6 Luna', 'Existing Luna results retain their attribution.');
+});
+
+test('administrator-only metadata cannot enable Luna or disable an unrelated model', () => {
+  for (const id of ['luna', 'gemini-3.8-flash', 'glm-4.7-flash', 'grok-4.7']) {
+    const input = configured();
+    const model = input.models.find((entry) => entry.id === id);
+    model.unavailableReason = 'admin_only';
+    if (id !== 'luna') model.available = false;
+    assert.throws(() => parseModelConfig(input));
+  }
+});
+
 test('malformed deployed settings fail closed rather than masquerading as a legacy local server', () => {
   const malformed = [null, {}, [], { models: null, reasoningControls: false }, { models: [], reasoningControls: true }];
   for (const mutate of [

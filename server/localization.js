@@ -6,6 +6,7 @@ const messages = {
   'Choose a valid symbolic reading setting.': ['יש לבחור הגדרה תקינה לקריאה סמלית.', 'Выберите допустимую настройку символического прочтения.'],
   'The analysis took too long. Please try again.': ['הניתוח נמשך זמן רב מדי. יש לנסות שוב.', 'Анализ занял слишком много времени. Повторите попытку.'],
   'Choose a valid analysis model.': ['יש לבחור מודל ניתוח תקין.', 'Выберите допустимую модель анализа.'],
+  'Luna is available on the administrator site only.': ['Luna זמין באתר המנהל בלבד.', 'Luna доступна только на сайте администратора.'],
   'Model selection is available on deployed public and administrator sites only.': ['בחירת מודל זמינה רק באתר הציבורי ובאתר המנהל הפרוסים.', 'Выбор модели доступен только на опубликованных публичном и административном сайтах.'],
   'The selected analysis model is not configured. Please try again later.': ['מודל הניתוח שנבחר אינו מוגדר. יש לנסות שוב מאוחר יותר.', 'Выбранная модель анализа не настроена. Повторите попытку позже.'],
   'Reasoning settings are available for administrator Grok 4.7 only.': ['הגדרות עומק החשיבה זמינות רק למנהל במודל Grok 4.7.', 'Настройки глубины рассуждений доступны только администратору для Grok 4.7.'],

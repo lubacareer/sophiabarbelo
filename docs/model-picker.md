@@ -1,10 +1,10 @@
 # Model selection and server setup
 
-The public and administrator Vercel projects offer the same fixed model catalog. Both default to Luna. Missing credentials or confirmations disable the affected choice; the server never substitutes another model, including after a rate limit. Changing the next model preserves existing input and results, whose model attribution remains attached to the result. Selections are remembered separately on each origin.
+The public and administrator Vercel projects list the same fixed model catalog. Luna is administrator-only and remains disabled in the public picker. The public default is GLM-4.7-Flash; the protected administrator default is Luna. Missing credentials or confirmations disable the affected choice; the server never substitutes another model, including after a rate limit. Changing the next model preserves existing input and results, whose model attribution remains attached to the result. Selections are remembered separately on each origin. A saved public Luna selection stays disabled until the visitor explicitly chooses an available model; it is never silently replaced.
 
 | Picker choice / API ID | Fixed model | Research | Required server configuration |
 | --- | --- | --- | --- |
-| GPT-6 Luna / `luna` | OpenAI `gpt-6-luna` | OpenAI web search | `OPENAI_API_KEY`, `SOPHIA_OPENAI_COSTS_CONFIRMED=true` |
+| GPT-6 Luna / `luna` | OpenAI `gpt-6-luna` | OpenAI web search | Administrator project only: `OPENAI_API_KEY`, `SOPHIA_OPENAI_COSTS_CONFIRMED=true` |
 | Gemini 3.8 Flash / `gemini-3.8-flash` | Google `gemini-3.8-flash` | Tavily | `GEMINI_API_KEY`, either `SOPHIA_GEMINI_FREE_CONFIRMED=true` or `SOPHIA_GEMINI_COSTS_CONFIRMED=true`, plus Tavily below |
 | GLM-4.7-Flash / `glm-4.7-flash` | Cloudflare `@cf/zai-org/glm-4.7-flash` | Tavily | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `SOPHIA_CLOUDFLARE_FREE_CONFIRMED=true`, plus Tavily below |
 | Grok 4.7 / `grok-4.7` | xAI `grok-4.7` | xAI web search | `XAI_API_KEY`; public additionally requires `SOPHIA_PUBLIC_XAI_COSTS_CONFIRMED=true` |
@@ -34,14 +34,14 @@ All public models share the same Redis quota identifiers: five admitted attempts
 
 ## API compatibility
 
-`GET /api/config` adds `models` and `defaultModelId`. Each record contains its fixed `id`, `label`, `available`, `unavailableReason`, `access`, and `reasoningControls`; it contains no key, token, balance, or billing identifier. `POST /api/analyze` accepts optional `modelId`, and successful deployed responses include `analysisModelId`. Omitting a deployed selection now selects Luna on either role. Unknown, unavailable, or incompatible selections fail before quota acquisition or URL extraction.
+`GET /api/config` adds `models` and `defaultModelId`. Each record contains its fixed `id`, `label`, `available`, `unavailableReason`, `access`, and `reasoningControls`; it contains no key, token, balance, or billing identifier. `POST /api/analyze` accepts optional `modelId`, and successful deployed responses include `analysisModelId`. Omitting a deployed selection selects GLM-4.7-Flash publicly and Luna on the administrator site. Public Luna is always advertised with `available: false` and `unavailableReason: "admin_only"`; explicit public Luna requests return localized HTTP 403 even when OpenAI credentials and confirmations are present. Unknown, unavailable, or incompatible selections fail before quota acquisition, URL extraction, or provider dispatch. An unconfigured default fails without choosing another model.
 
 The deployment role is server-owned. Request headers, browser pathnames, arbitrary provider names, and raw model names cannot select another role or endpoint. Public Grok rejects supplied reasoning overrides. Existing local/Caddy behavior remains selected by `ANALYSIS_PROVIDER`; its legacy config response does not expose the deployed picker, and explicit deployed `modelId` requests are rejected locally. The local Groq adapter remains available for compatibility. Deployed `SOPHIA_PUBLIC_PROVIDER` and Groq fallback settings are ignored by this version.
 
 ## Preview and Production setup
 
 1. Verify provider account tiers and create durable application credentials. Do not reuse revoked or expiring benchmark credentials.
-2. Add Secrets separately to each project's Preview environment, scoped to `codex/public-research-quotas`. Add only confirmations backed by completed access checks. Keep the administrator deployment protected and public-project previews protected.
+2. Add Secrets separately to each project's Preview environment, scoped to the branch being tested. Configure OpenAI credentials and cost confirmation only on the administrator project. Remove public copies of `OPENAI_API_KEY` and `SOPHIA_OPENAI_COSTS_CONFIRMED` from Production, Preview, Development, and branch overrides. Add only confirmations backed by completed access checks. Keep the administrator deployment protected and public-project previews protected.
 3. Push the branch to create ordinary Git-triggered previews. Verify configuration, selected-model attribution, citations, quota sharing, and administrator authentication before staging Production values.
 4. Stage the verified new Production variables without altering existing live provider settings. Retain old Groq variables temporarily for rollback compatibility; new code does not call them. Environment changes take effect only in a new deployment.
 5. Leave merging to the maintainer. Do not change billing, remove protection, or manually redeploy as part of credential setup.

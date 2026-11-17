@@ -14,15 +14,19 @@ function context(deployment, environment = modelEnvironment) {
   return { deployment, environment };
 }
 
-test('both deployed catalogs contain the same four fixed models with Luna default and safe availability metadata', () => {
+test('deployed catalogs retain four fixed models with role-based defaults and safe availability metadata', () => {
   for (const deployment of ['public', 'admin']) {
     const config = analysisConfiguration(context(deployment));
-    assert.equal(config.defaultModelId, 'luna');
+    assert.equal(config.defaultModelId, deployment === 'public' ? 'glm-4.7-flash' : 'luna');
     assert.equal(config.reasoningControls, false);
     assert.deepEqual(config.models.map((model) => model.id), ids);
     assert.deepEqual(config.models.map((model) => model.label), ['GPT-6 Luna', 'Gemini 3.8 Flash', 'GLM-4.7-Flash', 'Grok 4.7']);
     assert.deepEqual(config.models.map((model) => model.access), ['credits', 'free', 'free', 'credits']);
-    assert.ok(config.models.every((model) => model.available && model.unavailableReason === null));
+    for (const model of config.models) {
+      const restricted = deployment === 'public' && model.id === 'luna';
+      assert.equal(model.available, !restricted);
+      assert.equal(model.unavailableReason, restricted ? 'admin_only' : null);
+    }
     assert.deepEqual(config.models.filter((model) => model.reasoningControls).map((model) => model.id), deployment === 'admin' ? ['grok-4.7'] : []);
     assert.doesNotMatch(JSON.stringify(config), /test-.*-(?:key|token)|apiKey|API_KEY|account|@cf|gpt-oss/i);
     for (const model of config.models) assert.deepEqual(Object.keys(model).sort(), ['access', 'available', 'id', 'label', 'reasoningControls', 'unavailableReason'].sort());
@@ -39,14 +43,15 @@ test('availability requires every provider credential and free/cost confirmation
   for (const [modelId, names] of Object.entries(requirements)) for (const name of names) {
     for (const value of ['', ' ', undefined, name.startsWith('SOPHIA_') ? 'TRUE' : '']) {
       const environment = { ...modelEnvironment, [name]: value };
-      const config = analysisConfiguration(context('public', environment));
+      const deployment = modelId === 'luna' ? 'admin' : 'public';
+      const config = analysisConfiguration(context(deployment, environment));
       assert.deepEqual(config.models.map((model) => model.id), ids);
       assert.deepEqual(config.models.find((model) => model.id === modelId), {
-        ...analysisConfiguration(context('public')).models.find((model) => model.id === modelId),
+        ...analysisConfiguration(context(deployment)).models.find((model) => model.id === modelId),
         available: false, unavailableReason: 'not_configured',
         ...(modelId === 'gemini-3.8-flash' && name === 'SOPHIA_GEMINI_FREE_CONFIRMED' ? { access: 'credits' } : {}),
       });
-      assert.throws(() => resolveAnalysisModel({ modelId }, context('public', environment)), (error) => error.status === 503);
+      assert.throws(() => resolveAnalysisModel({ modelId }, context(deployment, environment)), (error) => error.status === 503);
     }
   }
   const admin = analysisConfiguration(context('admin', { ...modelEnvironment, SOPHIA_PUBLIC_XAI_COSTS_CONFIRMED: undefined }));
@@ -114,6 +119,7 @@ test('deployed model dispatch pins each adapter/model and preserves language and
     ['grok-4.7', 'grok', 'grok-4.7'],
   ];
   for (const deployment of ['public', 'admin']) for (const [modelId, provider, model] of expected) {
+    if (deployment === 'public' && modelId === 'luna') continue;
     const calls = [];
     const adapters = Object.fromEntries(['openai', 'gemini', 'cloudflare', 'grok', 'groq'].map((name) => [name, async (text, options) => {
       calls.push({ name, text, options });
@@ -128,17 +134,18 @@ test('deployed model dispatch pins each adapter/model and preserves language and
   }
 });
 
-test('omitted deployed selection always uses Luna and ignores legacy provider/model environment switches', async () => {
+test('omitted deployed selections use role defaults and ignore legacy provider/model environment switches', async () => {
   for (const deployment of ['public', 'admin']) {
     const environment = { ...modelEnvironment, VERCEL: '1', SOPHIA_DEPLOYMENT_ROLE: deployment === 'public' ? 'admin' : 'public', SOPHIA_PUBLIC_PROVIDER: 'groq', ANALYSIS_PROVIDER: 'groq', OPENAI_MODEL: 'other-openai-model' };
     let calls = 0;
     const output = await analyzeConfigured('Claim', {}, {
       ...context(deployment, environment),
-      openai: async (_text, options) => { calls++; assert.equal(options.model, 'gpt-6-luna'); return result(); },
+      openai: async (_text, options) => { assert.equal(deployment, 'admin'); calls++; assert.equal(options.model, 'gpt-6-luna'); return result(); },
+      cloudflare: async (_text, options) => { assert.equal(deployment, 'public'); calls++; assert.equal(options.model, '@cf/zai-org/glm-4.7-flash'); return result(); },
       grok: async () => { throw new Error('Unexpected Grok default'); },
       groq: async () => { throw new Error('Unexpected Groq default'); },
     });
-    assert.equal(output.analysisModelId, 'luna');
+    assert.equal(output.analysisModelId, deployment === 'public' ? 'glm-4.7-flash' : 'luna');
     assert.equal(calls, 1);
   }
 });
@@ -150,7 +157,7 @@ test('invalid model IDs and incompatible reasoning settings are rejected before 
       await assert.rejects(() => analyzeConfigured('Claim', { modelId }, { ...context(deployment), ...adapters }), (error) => error.status === 400);
     }
     for (const modelId of ids) for (const reasoningEffort of ['low', 'medium', 'high']) {
-      if (deployment === 'admin' && modelId === 'grok-4.7') continue;
+      if ((deployment === 'admin' && modelId === 'grok-4.7') || (deployment === 'public' && modelId === 'luna')) continue;
       await assert.rejects(() => analyzeConfigured('Claim', { modelId, reasoningEffort }, { ...context(deployment), ...adapters }), (error) => error.status === 400 && /administrator Grok/.test(error.message));
     }
   }
@@ -172,6 +179,7 @@ test('administrator Grok retains its selector while public Grok forces low indep
 
 test('deployed failures never trigger another model or the former Groq fallback', async () => {
   for (const deployment of ['public', 'admin']) for (const modelId of ids) {
+    if (deployment === 'public' && modelId === 'luna') continue;
     const error = new AppError(503, 'Provider unavailable');
     error.providerRateLimited = true;
     const calls = [];
@@ -184,8 +192,8 @@ test('deployed failures never trigger another model or the former Groq fallback'
   for (const deployment of ['public', 'admin']) {
     const calls = [];
     const adapters = Object.fromEntries(['openai', 'gemini', 'cloudflare', 'grok', 'groq'].map((name) => [name, async () => { calls.push(name); return result(); }]));
-    await assert.rejects(() => analyzeConfigured('Claim', {}, { ...context(deployment, { ...modelEnvironment, OPENAI_API_KEY: undefined }), ...adapters }), (error) => error.status === 503);
-    assert.deepEqual(calls, [], 'Missing Luna configuration must not silently choose another available model.');
+    await assert.rejects(() => analyzeConfigured('Claim', {}, { ...context(deployment, { ...modelEnvironment, [deployment === 'public' ? 'CLOUDFLARE_API_TOKEN' : 'OPENAI_API_KEY']: undefined }), ...adapters }), (error) => error.status === 503);
+    assert.deepEqual(calls, [], 'Missing default model configuration must not silently choose another available model.');
   }
 });
 
@@ -253,6 +261,7 @@ test('all deployed adapters receive the same internal signal and deadline in bot
   const deadline = createDeadline(60_000);
   try {
     for (const deployment of ['public', 'admin']) for (const [modelId, adapter] of [['luna', 'openai'], ['gemini-3.8-flash', 'gemini'], ['glm-4.7-flash', 'cloudflare'], ['grok-4.7', 'grok']]) {
+      if (deployment === 'public' && modelId === 'luna') continue;
       let calls = 0;
       const output = await analyzeConfigured('Claim', { modelId, language: 'he', signal: deadline.signal, deadline }, {
         ...context(deployment),
